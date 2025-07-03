@@ -1,0 +1,2224 @@
+CLASS zcl_zzgts_mng_blkdbp_dpc_ext DEFINITION
+  PUBLIC
+  INHERITING FROM zcl_zzgts_mng_blkdbp_dpc
+  CREATE PUBLIC .
+
+  PUBLIC SECTION.
+
+    TYPES: ty_rng_bpname         TYPE RANGE OF zbp_name,
+           ty_rng_bpaddress      TYPE RANGE OF zbp_addr,
+           ty_rng_bpcountry      TYPE RANGE OF land1,
+           ty_rng_bpregion       TYPE RANGE OF regio,
+           ty_rng_bpcity         TYPE RANGE OF city,
+           ty_rng_spllisttype    TYPE RANGE OF /sapsll/spcat,
+           ty_rng_splnumber      TYPE RANGE OF /sapsll/exspl,
+           ty_rng_matchedname    TYPE RANGE OF /sapsll/mname,
+           ty_rng_matchedaddress TYPE RANGE OF /sapsll/maddr,
+           ty_rng_spl_city       TYPE RANGE OF zspl_city,
+           ty_rng_spl_region     TYPE RANGE OF zspl_regio,
+           ty_rng_spl_country    TYPE RANGE OF  zspl_land1,
+           ty_rng_spl_po_box     TYPE RANGE OF zspk_pobox,
+           ty_rng_spl_mch_kws    TYPE RANGE OF  /sapsll/term,
+           ty_rng_spl_name_score TYPE RANGE OF zspl_name_score,
+           ty_rng_spl_addr_score TYPE RANGE OF zspl_addr_score,
+           ty_rng_nlaunr         TYPE RANGE OF  zspl_name_seq,
+           ty_rng_alaunr         TYPE RANGE OF zspl_addr_seq.
+
+    TYPES: ty_rng_mlchk         TYPE RANGE OF boolean,
+           ty_rng_mlconf        TYPE RANGE OF zml_conf,
+           ty_rng_mlpredresp    TYPE RANGE OF zml_pred,
+           ty_rng_mlpreddate    TYPE RANGE OF zml_preddt,
+           ty_rng_mlscorestatus TYPE RANGE OF zml_score_status,
+           ty_rng_mlnamescore   TYPE RANGE OF zml_nmperc,
+           ty_rng_mladdrscore   TYPE RANGE OF zml_adperc.
+
+    TYPES: BEGIN OF ty_ml_blkdbpaddr.
+    TYPES: mlchk         TYPE ty_rng_mlchk,
+           mlconf        TYPE ty_rng_mlconf,
+           mlpredresp    TYPE ty_rng_mlpredresp,
+           mlpreddate    TYPE ty_rng_mlpreddate,
+           mlscorestatus TYPE ty_rng_mlscorestatus,
+           mlnamescore   TYPE ty_rng_mlnamescore,
+           mladdrscore   TYPE ty_rng_mladdrscore.
+    TYPES: END OF ty_ml_blkdbpaddr.
+
+    TYPES: BEGIN OF ty_spl_filters.
+    TYPES: bpname         TYPE ty_rng_bpname,
+           bpaddress      TYPE ty_rng_bpaddress,
+           bpcountry      TYPE ty_rng_bpcountry,
+           bpregion       TYPE ty_rng_bpregion,
+           bpcity         TYPE ty_rng_bpcity,
+           spllisttype    TYPE ty_rng_spllisttype,
+           splnumber      TYPE ty_rng_splnumber,
+           matchedname    TYPE ty_rng_matchedname,
+           matchedaddress TYPE ty_rng_matchedaddress,
+           spl_city       TYPE ty_rng_spl_city,
+           spl_region     TYPE ty_rng_spl_region,
+           spl_country    TYPE ty_rng_spl_country,
+           spl_po_box     TYPE ty_rng_spl_po_box,
+           spl_mch_kws    TYPE ty_rng_spl_mch_kws,
+           spl_name_score TYPE ty_rng_spl_name_score,
+           spl_addr_score TYPE ty_rng_spl_addr_score,
+           nlaunr         TYPE ty_rng_nlaunr,
+           alaunr         TYPE ty_rng_alaunr.
+    TYPES: END OF ty_spl_filters.
+
+    METHODS /iwbep/if_mgw_appl_srv_runtime~changeset_begin
+        REDEFINITION .
+    METHODS /iwbep/if_mgw_appl_srv_runtime~changeset_process
+        REDEFINITION .
+protected section.
+
+  methods ZZSPLBLKDADDRDET_GET_ENTITYSET
+    redefinition .
+  methods ZZSPLBLKDADDRHDR_GET_ENTITY
+    redefinition .
+  methods ZZSPLHITSDETAILS_GET_ENTITYSET
+    redefinition .
+  methods ZZSPLSCRNGBLKDPA_GET_ENTITYSET
+    redefinition .
+private section.
+
+  data MV_RELEASE_BLOCK type BOOLE_D .
+  data MV_CONFIRM_BLOCK type BOOLE_D .
+  data MV_PERFORM_SCREENING type BOOLE_D .
+  data MV_SET_POSITIVE type BOOLE_D .
+  data MV_SET_NEGATIVE type BOOLE_D .
+  data MV_STATUS_PICK type BOOLE_D .
+  data MV_STATUS_ONHOLD type BOOLE_D .
+  data MV_STATUS_FORWARD type BOOLE_D .
+  data MV_MANAGE_COMMENT type BOOLE_D .
+  data MV_OBJPAGE_ACTION type BOOLE_D .
+  data MV_OBJPAGE_COMMENT type BOOLE_D .
+  data MV_GET_ML_PREDICTION type BOOLE_D .   "For Get ML Prediction
+  constants:
+    BEGIN OF gcs_sorting_order,
+        descending TYPE string VALUE 'desc',                "#EC NOTEXT
+        ascending  TYPE string VALUE 'asc',                 "#EC NOTEXT
+      END OF   gcs_sorting_order .
+  constants:
+    BEGIN OF gc_action,
+        release_block       TYPE string VALUE 'ReleaseBlock',
+        confirm_block       TYPE string VALUE 'ConfirmBlock',
+        perform_screening   TYPE string VALUE 'PerformScreening',
+        set_positive_list   TYPE string VALUE 'SetPositive',
+        set_negative_list   TYPE string VALUE 'SetNegative',
+        set_process_forward TYPE string VALUE 'SetStatusForward',
+        set_process_Onhold  TYPE string VALUE 'SetStatusOnHold',
+        set_process_pick    TYPE string VALUE 'SetStatusPick',
+        manage_comment      TYPE string VALUE 'managecomment',
+        get_ml_prediction   TYPE string VALUE 'GetMLPrediction',  "For Get ML Prediction
+      END OF gc_action .
+
+  methods APPLY_ORDERBY
+    importing
+      !IT_ORDER type /IWBEP/T_MGW_TECH_ORDER
+    changing
+      !CT_DATA type STANDARD TABLE .
+  methods APPLY_PAGING
+    importing
+      !IV_TOP type STRING
+      !IV_SKIP type STRING
+    changing
+      !CT_DATA type STANDARD TABLE .
+  methods GET_FILTER
+    importing
+      !IO_FILTER type ref to /IWBEP/IF_MGW_REQ_FILTER optional
+    exporting
+      value(ES_FILTER) type ANY
+    raising
+      /IWBEP/CX_MGW_TECH_EXCEPTION .
+  methods GET_MLPRED
+    importing
+      !IT_BLKD_ADDR type /SAPSLL/BLOCKED_BP_T
+    exporting
+      !ET_MESSAGES type BAPIRET2_T .
+  methods CREATE_CASE
+    importing
+      !IT_BLKD_ADDR type /SAPSLL/BLOCKED_BP_T
+    exporting
+      !ET_MESSAGES type BAPIRET2_T .
+  methods CLOSE_CASE
+    importing
+      !IT_BLKD_ADDR type /SAPSLL/BLOCKED_BP_T
+    exporting
+      !ET_MESSAGES type BAPIRET2_T .
+ENDCLASS.
+
+
+
+CLASS ZCL_ZZGTS_MNG_BLKDBP_DPC_EXT IMPLEMENTATION.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_ZZGTS_MNG_BLKDBP_DPC_EXT->/IWBEP/IF_MGW_APPL_SRV_RUNTIME~CHANGESET_BEGIN
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IT_OPERATION_INFO              TYPE        /IWBEP/T_MGW_OPERATION_INFO
+* | [<-->] CV_DEFER_MODE                  TYPE        XSDBOOLEAN(optional)
+* | [!CX!] /IWBEP/CX_MGW_BUSI_EXCEPTION
+* | [!CX!] /IWBEP/CX_MGW_TECH_EXCEPTION
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD /iwbep/if_mgw_appl_srv_runtime~changeset_begin.
+*-----------------------------------------------------------------------
+* Creation Date(06/12/2025):
+* Author's Name (& User id): Fayez Kazi
+* Title                    : Manage Blocked Partners - Machine Learing
+* Technical Specification  : VAL-XXXXXXXX / BTEV-XXXXXX / SPEC-XXXXX
+* ER/IM                    :
+*-----------------------------------------------------------------------
+* Description:
+*-----------------------------------------------------------------------
+* As part of Custom oData service - ZZGTS_MNG_BLKDBP_SRV, this method
+* Which Action API to be performed when the user clicks on the Action button
+* in Manage Blocked Partners - Machine Learning App.
+*----------------------------------------------------------------------*
+* Change Log
+*----------------------------------------------------------------------*
+* Change-Nr          User Name           Transport      Change Date
+* Description:
+* RFC2466528         KAZIF              DG1K912414     12-JUNE-2025
+* E4H - SPL ML Custom Fiori Application
+*----------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&  Method        /IWBEP/IF_MGW_APPL_SRV_RUNTIME~CHANGESET_BEGIN
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+
+
+    READ TABLE it_operation_info WITH KEY action_name = if_lls_annotation=>gc_action-releasesplblock TRANSPORTING NO FIELDS.
+    IF sy-subrc EQ 0.
+      cv_defer_mode = abap_true.
+      mv_release_block = abap_true.
+    ENDIF.
+
+    READ TABLE it_operation_info WITH KEY
+      action_name = if_lls_annotation=>gc_action-confirmsplblock TRANSPORTING NO FIELDS.
+    IF sy-subrc EQ 0.
+      cv_defer_mode = abap_true.
+      mv_confirm_block = abap_true.
+    ENDIF.
+
+    READ TABLE it_operation_info WITH KEY
+        action_name = if_lls_annotation=>gc_action-PerformSPLScreening TRANSPORTING NO FIELDS.
+    IF sy-subrc EQ 0.
+      cv_defer_mode = abap_true.
+      mv_perform_screening = abap_true.
+    ENDIF.
+
+    READ TABLE it_operation_info WITH KEY
+        action_name = if_lls_annotation=>gc_action-SetSPLPositive TRANSPORTING NO FIELDS.
+    IF sy-subrc EQ 0.
+      cv_defer_mode = abap_true.
+      mv_set_positive = abap_true.
+    ENDIF.
+
+    READ TABLE it_operation_info WITH KEY
+        action_name = if_lls_annotation=>gc_action-SetSPLNegative TRANSPORTING NO FIELDS.
+    IF sy-subrc EQ 0.
+      cv_defer_mode = abap_true.
+      mv_set_negative = abap_true.
+    ENDIF.
+
+    READ TABLE it_operation_info WITH KEY
+        action_name = if_lls_annotation=>gc_action-SetProcessingStatusPick TRANSPORTING NO FIELDS.
+    IF sy-subrc EQ 0.
+      cv_defer_mode = abap_true.
+      mv_status_pick = abap_true.
+    ENDIF.
+
+    READ TABLE it_operation_info WITH KEY
+        action_name = if_lls_annotation=>gc_action-SetProcessingStatusOnHold TRANSPORTING NO FIELDS.
+    IF sy-subrc EQ 0.
+      cv_defer_mode = abap_true.
+      mv_status_onhold = abap_true.
+    ENDIF.
+
+    READ TABLE it_operation_info WITH KEY
+        action_name = if_lls_annotation=>gc_action-SetProcessingStatusForward TRANSPORTING NO FIELDS.
+    IF sy-subrc EQ 0.
+      cv_defer_mode = abap_true.
+      mv_status_forward = abap_true.
+    ENDIF.
+
+    READ TABLE it_operation_info WITH KEY
+        action_name = if_lls_annotation=>gc_action-managecomment TRANSPORTING NO FIELDS.
+    IF sy-subrc EQ 0.
+      cv_defer_mode = abap_true.
+      mv_manage_comment = abap_true.
+    ENDIF.
+
+    READ TABLE it_operation_info WITH KEY
+      action_name = gc_action-get_ml_prediction TRANSPORTING NO FIELDS.
+    IF sy-subrc EQ 0.
+      cv_defer_mode = abap_true.
+      mv_get_ml_prediction = abap_true.
+    ENDIF.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_ZZGTS_MNG_BLKDBP_DPC_EXT->/IWBEP/IF_MGW_APPL_SRV_RUNTIME~CHANGESET_PROCESS
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IT_CHANGESET_REQUEST           TYPE        /IWBEP/IF_MGW_APPL_TYPES=>TY_T_CHANGESET_REQUEST
+* | [<-->] CT_CHANGESET_RESPONSE          TYPE        /IWBEP/IF_MGW_APPL_TYPES=>TY_T_CHANGESET_RESPONSE
+* | [!CX!] /IWBEP/CX_MGW_BUSI_EXCEPTION
+* | [!CX!] /IWBEP/CX_MGW_TECH_EXCEPTION
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD /iwbep/if_mgw_appl_srv_runtime~changeset_process.
+*-----------------------------------------------------------------------
+* Creation Date(06/12/2025):
+* Author's Name (& User id): Fayez Kazi
+* Title                    : Manage Blocked Partners - Machine Learing
+* Technical Specification  : VAL-XXXXXXXX / BTEV-XXXXXX / SPEC-XXXXX
+* ER/IM                    :
+*-----------------------------------------------------------------------
+* Description:
+*-----------------------------------------------------------------------
+* As part of Custom oData service - ZZGTS_MNG_BLKDBP_SRV, this method
+* executes any of the Actions performed by the user on the App.
+*----------------------------------------------------------------------*
+* Change Log
+*----------------------------------------------------------------------*
+* Change-Nr          User Name           Transport      Change Date
+* Description:
+* RFC2466528         KAZIF              DG1K912414     12-JUNE-2025
+* E4H - SPL ML Custom Fiori Application
+*----------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&  Method        /IWBEP/IF_MGW_APPL_SRV_RUNTIME~CHANGESET_PROCESS
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+    DATA lt_context_details    TYPE /iwbep/if_mgw_appl_types=>ty_t_changeset_request.
+    DATA lo_reuest             TYPE REF TO /iwbep/if_mgw_req_func_import.
+
+    DATA ls_changeset_response TYPE /iwbep/if_mgw_appl_types=>ty_s_changeset_response.
+    DATA lt_parameter          TYPE /iwbep/t_mgw_name_value_pair.
+    DATA ls_parameter          TYPE LINE OF /iwbep/t_mgw_name_value_pair.
+    DATA ls_blocked_addr TYPE /sapsll/blocked_bp_s.
+    DATA lt_blocked_addr TYPE /sapsll/blocked_bp_t.
+
+
+** Read the context to get the parameters value.
+    lt_context_details = it_changeset_request.
+
+    LOOP AT lt_context_details INTO DATA(ls_context).
+      lo_reuest ?=  ls_context-request_context.
+      lt_parameter = lo_reuest->get_parameters( ).
+
+      READ TABLE lt_parameter INTO ls_parameter WITH KEY name = 'ADDRESSID'.
+      IF sy-subrc EQ 0.
+        ls_blocked_addr-adrnr  = ls_parameter-value.
+      ENDIF.
+
+      READ TABLE lt_parameter INTO ls_parameter WITH KEY name = 'LEGALREGULATION'.
+      IF sy-subrc EQ 0.
+        ls_blocked_addr-lgreg = ls_parameter-value.
+      ENDIF.
+      READ TABLE lt_parameter INTO ls_parameter WITH KEY name = 'PROCESSOR'.
+      IF sy-subrc EQ 0.
+        ls_blocked_addr-prosl = ls_parameter-value.
+      ENDIF.
+      READ TABLE lt_parameter INTO ls_parameter WITH KEY name = 'PROCESSCOMMENT'.
+      IF sy-subrc EQ 0.
+        ls_blocked_addr-pscmt = ls_parameter-value.  " processing comment
+      ENDIF.
+      READ TABLE lt_parameter INTO ls_parameter WITH KEY name = 'BUSINESSPARTNER'.
+      IF sy-subrc EQ 0.
+        ls_blocked_addr-partner = ls_parameter-value.
+      ENDIF.
+      READ TABLE lt_parameter INTO ls_parameter WITH KEY name = 'RELEASEREASON'.
+      IF sy-subrc EQ 0.
+        ls_blocked_addr-optid = ls_parameter-value.
+      ENDIF.
+      READ TABLE lt_parameter INTO ls_parameter WITH KEY name = 'RELCFMCOMMENT'.
+      IF sy-subrc EQ 0.
+        ls_blocked_addr-rccmt = ls_parameter-value.
+      ENDIF.
+
+      APPEND ls_blocked_addr TO lt_blocked_addr.
+
+      CLEAR: ls_changeset_response.
+      ls_changeset_response-operation_no = ls_context-operation_no.
+      INSERT ls_changeset_response INTO TABLE ct_changeset_response.
+    ENDLOOP.
+
+    DATA(lo_api_obj) = NEW /sapsll/cl_api_spl_blkdbpaddr( ).
+
+*--- Call API method in mass
+    "Execute Release Block Action
+    IF mv_release_block EQ abap_true.
+      "First Close the Active Case
+      me->close_case(
+          EXPORTING
+            it_blkd_addr = lt_blocked_addr
+          IMPORTING
+            et_messages = DATA(lt_messages) ).
+      "If The Case Create/Change is successful then only proceed
+      IF lt_messages[] IS INITIAL.
+        lo_api_obj->release_block(
+           EXPORTING
+             it_blkd_addr = lt_blocked_addr
+           IMPORTING
+             et_messages  = lt_messages
+         ).
+      ENDIF.
+    ENDIF.
+
+    "Execute Confirm Block Action
+    IF mv_confirm_block EQ abap_true.
+      "First Close the Active Case
+      me->close_case(
+          EXPORTING
+            it_blkd_addr = lt_blocked_addr
+          IMPORTING
+            et_messages = lt_messages ).
+      "If The Case Create/Change is successful then only proceed
+      IF lt_messages[] IS INITIAL.
+        lo_api_obj->confirm_block(
+            EXPORTING
+              it_blkd_addr = lt_blocked_addr
+            IMPORTING
+              et_messages  = lt_messages
+          ).
+      ENDIF.
+    ENDIF.
+
+    "Execute SPL Run Action
+    IF mv_perform_screening EQ abap_true.
+      lo_api_obj->perform_spl_screening(
+          EXPORTING
+            it_blkd_addr = lt_blocked_addr
+          IMPORTING
+            et_messages  = lt_messages
+        ).
+
+    ENDIF.
+
+    "Execute Set Positive Action
+    IF mv_set_positive EQ abap_true.
+      lo_api_obj->set_positive_negative_list(
+          EXPORTING
+            iv_positive  = abap_true
+            it_blkd_addr = lt_blocked_addr
+          IMPORTING
+            et_messages  = lt_messages
+        ).
+
+    ENDIF.
+
+    "Execute Set Negative Action
+    IF mv_set_negative EQ abap_true.
+      lo_api_obj->set_positive_negative_list(
+          EXPORTING
+            iv_positive  = abap_false
+            it_blkd_addr = lt_blocked_addr
+          IMPORTING
+            et_messages  = lt_messages
+        ).
+
+    ENDIF.
+
+    "Execute Adopt Action
+    IF mv_status_pick EQ abap_true.
+      "First Create/Change the Case
+      me->create_case(
+          EXPORTING
+            it_blkd_addr = lt_blocked_addr
+          IMPORTING
+            et_messages = lt_messages ).
+      "If The Case Create/Change is successful then only proceed
+      IF lt_messages[] IS INITIAL.
+        lo_api_obj->set_processing_status(
+            EXPORTING
+              iv_action    = '5'
+              it_blkd_addr = lt_blocked_addr
+            IMPORTING
+              et_messages  = lt_messages
+          ).
+      ENDIF.
+
+    ENDIF.
+
+    "Execute On Hold Action
+    IF mv_status_onhold EQ abap_true.
+      lo_api_obj->set_processing_status(
+          EXPORTING
+            iv_action  = '2'
+            it_blkd_addr = lt_blocked_addr
+          IMPORTING
+            et_messages  = lt_messages
+        ).
+
+    ENDIF.
+
+    "Execute Forward Action
+    IF mv_status_forward EQ abap_true.
+      "First Create/Change the Case
+      me->create_case(
+          EXPORTING
+            it_blkd_addr = lt_blocked_addr
+          IMPORTING
+            et_messages = lt_messages ).
+      "If The Case Create/Change is successful then only proceed
+      IF lt_messages[] IS INITIAL.
+        lo_api_obj->set_processing_status(
+            EXPORTING
+              iv_action    = '4'
+              it_blkd_addr = lt_blocked_addr
+            IMPORTING
+              et_messages  = lt_messages
+          ).
+      ENDIF.
+    ENDIF.
+
+    "Execute Manage / Add Comments Action
+    IF mv_manage_comment EQ abap_true.
+      lo_api_obj->manage_comment(
+          EXPORTING
+            it_blkd_addr = lt_blocked_addr
+          IMPORTING
+            et_messages  = lt_messages
+        ).
+
+    ENDIF.
+
+    "Execute Get Machine Learning Predictions
+    IF mv_get_ml_prediction = abap_true.
+      "Call the API here to update the ML Prediction
+      me->get_mlpred(
+          EXPORTING
+            it_blkd_addr = lt_blocked_addr
+          IMPORTING
+            et_messages  = lt_messages
+      ).
+    ENDIF.
+
+    "If any Message raised during the execution of any of the Action due to lack of Authorization
+    "or data status etc, then raise exception for the error handling
+    IF lt_messages IS NOT INITIAL.
+      LOOP AT lt_messages ASSIGNING FIELD-SYMBOL(<ls_message>).
+        me->mo_context->get_message_container( )->add_message(
+          EXPORTING
+            iv_msg_type               = <ls_message>-type
+            iv_msg_id                 = <ls_message>-id
+            iv_msg_number             = <ls_message>-number
+            iv_msg_text               = <ls_message>-message
+            iv_msg_v1                 = <ls_message>-message_v1
+            iv_msg_v2                 = <ls_message>-message_v2
+            iv_msg_v3                 = <ls_message>-message_v3
+            iv_msg_v4                 = <ls_message>-message_v4
+            iv_add_to_response_header = abap_true
+            iv_is_transition_message  = abap_true
+        ).
+      ENDLOOP.
+      RAISE EXCEPTION TYPE /iwbep/cx_mgw_busi_exception
+        EXPORTING
+          message_container = me->mo_context->get_message_container( )
+          textid            = /iwbep/cx_mgw_busi_exception=>business_error.
+    ELSE. "raise success message
+      me->mo_context->get_message_container( )->add_message(
+          EXPORTING
+            iv_msg_type               = 'S'
+            iv_msg_id                 = '/SAPSLL/CON_SPL_CHK'
+            iv_msg_number             = '150'
+            iv_add_to_response_header = abap_true
+            iv_is_transition_message  = abap_true
+        ).
+
+    ENDIF.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_ZZGTS_MNG_BLKDBP_DPC_EXT->APPLY_ORDERBY
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IT_ORDER                       TYPE        /IWBEP/T_MGW_TECH_ORDER
+* | [<-->] CT_DATA                        TYPE        STANDARD TABLE
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD apply_orderby.
+
+    DATA: lt_otab  TYPE abap_sortorder_tab,
+          ls_oline TYPE abap_sortorder.
+
+    DATA: ls_order LIKE LINE OF it_order.
+
+    LOOP AT it_order INTO ls_order.
+      ls_oline-name = ls_order-property.
+      TRANSLATE ls_oline-name TO UPPER CASE.             "#EC TRANSLANG
+
+      IF ls_order-order = gcs_sorting_order-descending.
+        ls_oline-descending = 'X'.
+      ENDIF.
+
+      APPEND ls_oline TO lt_otab.
+      CLEAR ls_oline.
+
+    ENDLOOP.
+
+    SORT ct_data BY (lt_otab).
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_ZZGTS_MNG_BLKDBP_DPC_EXT->APPLY_PAGING
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_TOP                         TYPE        STRING
+* | [--->] IV_SKIP                        TYPE        STRING
+* | [<-->] CT_DATA                        TYPE        STANDARD TABLE
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD apply_paging.
+
+    DATA: lv_from TYPE i,
+          lv_to   TYPE i.
+
+    DATA: lo_data TYPE REF TO data.
+
+    FIELD-SYMBOLS: <fs_result> TYPE STANDARD TABLE,
+                   <fs_rec>    TYPE any.
+
+    CREATE DATA lo_data LIKE ct_data.
+    ASSIGN lo_data->* TO <fs_result>.
+
+    IF iv_skip IS NOT INITIAL.
+      lv_from = iv_skip + 1. "start from record
+    ELSE.
+      lv_from = 1.
+    ENDIF.
+
+    IF iv_top IS NOT INITIAL.
+      lv_to   = lv_from + iv_top - 1.
+    ELSE.
+      lv_to = lines( ct_data ).
+    ENDIF.
+
+    LOOP AT ct_data ASSIGNING <fs_rec> FROM lv_from TO lv_to. "#EC CI_NOORDER
+      APPEND <fs_rec> TO <fs_result>.
+    ENDLOOP.
+
+    ct_data = <fs_result>.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_ZZGTS_MNG_BLKDBP_DPC_EXT->GET_FILTER
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IO_FILTER                      TYPE REF TO /IWBEP/IF_MGW_REQ_FILTER(optional)
+* | [<---] ES_FILTER                      TYPE        ANY
+* | [!CX!] /IWBEP/CX_MGW_TECH_EXCEPTION
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD get_filter.
+    DATA(lt_components) = CAST cl_abap_structdescr( cl_abap_structdescr=>describe_by_data( es_filter ) )->get_components( ).
+    LOOP AT lt_components ASSIGNING FIELD-SYMBOL(<ls_component>).
+      ASSIGN COMPONENT <ls_component>-name OF STRUCTURE es_filter TO FIELD-SYMBOL(<lt_filter>).
+      IF sy-subrc = 0.
+        READ TABLE io_filter->get_filter_select_options( ) INTO DATA(ls_filter_select_option)
+          WITH KEY property = <ls_component>-name.
+        IF sy-subrc = 0.
+          io_filter->convert_select_option(
+            EXPORTING
+              is_select_option  = ls_filter_select_option
+            IMPORTING
+              et_select_option  = <lt_filter>
+          ).
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Protected Method ZCL_ZZGTS_MNG_BLKDBP_DPC_EXT->ZZSPLBLKDADDRDET_GET_ENTITYSET
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_ENTITY_NAME                 TYPE        STRING
+* | [--->] IV_ENTITY_SET_NAME             TYPE        STRING
+* | [--->] IV_SOURCE_NAME                 TYPE        STRING
+* | [--->] IT_FILTER_SELECT_OPTIONS       TYPE        /IWBEP/T_MGW_SELECT_OPTION
+* | [--->] IS_PAGING                      TYPE        /IWBEP/S_MGW_PAGING
+* | [--->] IT_KEY_TAB                     TYPE        /IWBEP/T_MGW_NAME_VALUE_PAIR
+* | [--->] IT_NAVIGATION_PATH             TYPE        /IWBEP/T_MGW_NAVIGATION_PATH
+* | [--->] IT_ORDER                       TYPE        /IWBEP/T_MGW_SORTING_ORDER
+* | [--->] IV_FILTER_STRING               TYPE        STRING
+* | [--->] IV_SEARCH_STRING               TYPE        STRING
+* | [--->] IO_TECH_REQUEST_CONTEXT        TYPE REF TO /IWBEP/IF_MGW_REQ_ENTITYSET(optional)
+* | [<---] ET_ENTITYSET                   TYPE        ZCL_ZZGTS_MNG_BLKDBP_MPC=>TT_ZZSPLBLKDADDRDETAIL
+* | [<---] ES_RESPONSE_CONTEXT            TYPE        /IWBEP/IF_MGW_APPL_SRV_RUNTIME=>TY_S_MGW_RESPONSE_CONTEXT
+* | [!CX!] /IWBEP/CX_MGW_BUSI_EXCEPTION
+* | [!CX!] /IWBEP/CX_MGW_TECH_EXCEPTION
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD zzsplblkdaddrdet_get_entityset.
+*-----------------------------------------------------------------------
+* Creation Date(06/12/2025):
+* Author's Name (& User id): Fayez Kazi
+* Title                    : Manage Blocked Partners - Machine Learing
+* Technical Specification  : VAL-XXXXXXXX / BTEV-XXXXXX / SPEC-XXXXX
+* ER/IM                    :
+*-----------------------------------------------------------------------
+* Description:
+*-----------------------------------------------------------------------
+* As part of Custom oData service - ZZGTS_MNG_BLKDBP_SRV, this method
+* provides all SPL Address details for Individual Business Partner.
+*----------------------------------------------------------------------*
+* Change Log
+*----------------------------------------------------------------------*
+* Change-Nr          User Name           Transport      Change Date
+* Description:
+* RFC2466528         KAZIF              DG1K912414     12-JUNE-2025
+* E4H - SPL ML Custom Fiori Application
+*----------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&  Method           ZZSPLBLKDADDRDET_GET_ENTITYSET
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+
+
+    TYPES: ty_rng_guid TYPE RANGE OF /sapsll/guid_splat.
+    DATA(lo_api_obj) = NEW /sapsll/cl_api_spl_blkdbpaddr( ).
+    DATA ls_entity LIKE LINE OF et_entityset.
+    DATA ls_key_value TYPE lls_splhitdetail_s.
+
+    DATA: lv_adrnr   TYPE adrnr,
+          lv_partner TYPE bu_partner.
+
+    DATA: ls_crit         TYPE /sapsll/adrcon_crit_s,
+          ls_adrnr        TYPE /sapsll/adrnr_r_s,
+          ls_lgreg        TYPE /sapsll/lgreg_r_s,
+          lt_local_adrcon TYPE /sapsll/adrcon_t.
+    DATA: lt_rng_guid_splat TYPE RANGE OF /sapsll/guid_16,
+          ls_rng_guid_splat LIKE LINE OF lt_rng_guid_splat.
+
+    io_tech_request_context->get_converted_source_keys(
+      IMPORTING
+        es_key_values = ls_key_value
+    ).
+
+    MOVE-CORRESPONDING ls_key_value TO ls_entity.
+
+    "Ensure App user is using the Filters for the SPL Blocked Address Details
+    IF it_filter_select_options[] IS NOT INITIAL.
+      DATA(lt_rng_addressid) = VALUE #( it_filter_select_options[ property = 'AddressID' ]-select_options ).
+      DATA(lt_rng_lgreg) = VALUE #( it_filter_select_options[ property = 'LegalRegulation' ]-select_options ).
+      DATA(lt_rng_partner) = VALUE #( it_filter_select_options[ property = 'BusinessPartner' ]-select_options ).
+      READ TABLE lt_rng_addressid ASSIGNING FIELD-SYMBOL(<ls_rng_addressid>) INDEX 1.
+      IF sy-subrc = 0.
+        ls_entity-addressid = <ls_rng_addressid>-low.
+        lv_adrnr = <ls_rng_addressid>-low.
+        ls_adrnr-sign = <ls_rng_addressid>-sign.
+        ls_adrnr-option = <ls_rng_addressid>-option.
+        <ls_rng_addressid>-low = lv_adrnr = ls_adrnr-low = |{ lv_adrnr ALPHA = IN }|.
+        APPEND ls_adrnr TO ls_crit-adrnr.
+      ENDIF.
+
+      READ TABLE lt_rng_partner ASSIGNING FIELD-SYMBOL(<ls_rng_partner>) INDEX 1.
+      IF sy-subrc = 0.
+        ls_entity-businesspartner = <ls_rng_partner>-low.
+        lv_partner = <ls_rng_partner>-low.
+        <ls_rng_partner>-low = lv_partner = |{ lv_partner ALPHA = IN }|.
+      ENDIF.
+
+      READ TABLE lt_rng_lgreg INTO DATA(ls_rng_lgreg) INDEX 1.
+      IF sy-subrc = 0.
+        ls_entity-legalregulation = ls_rng_lgreg-low.
+        ls_lgreg-sign = ls_rng_lgreg-sign.
+        ls_lgreg-option = ls_rng_lgreg-option.
+        ls_lgreg-low = ls_rng_lgreg-low.
+        APPEND ls_lgreg TO ls_crit-lgreg.
+      ENDIF.
+    ENDIF.
+
+    IF ls_crit-adrnr IS NOT INITIAL AND ls_crit-lgreg IS NOT INITIAL.
+      "Get the BP Address details
+      SELECT businesspartner, addressnumber, country, region
+        FROM i_businesspartneraddress
+        WHERE businesspartner IN @lt_rng_partner AND
+              addressnumber IN @lt_rng_addressid
+        ORDER BY businesspartner,addressnumber
+        INTO TABLE @DATA(lt_blkaddr_t).
+      IF sy-subrc = 0.
+        READ TABLE lt_blkaddr_t INTO DATA(ls_blkaddr) WITH KEY
+          businesspartner = lv_partner
+          addressnumber   = lv_adrnr BINARY SEARCH.
+        IF sy-subrc = 0.
+          ls_entity-bpregion = ls_blkaddr-region.
+          ls_entity-bpcountry = ls_blkaddr-country.
+        ENDIF.
+      ENDIF.
+      "Using the Filters data, get the Legal Control data of defined Address of the Business Partner
+      CALL FUNCTION '/SAPSLL/ADRCON_GET_OBJECT'
+        EXPORTING
+          is_crit       = ls_crit
+        IMPORTING
+          et_result     = lt_local_adrcon
+        EXCEPTIONS
+          invalid_call  = 1
+          missing_adrnr = 2
+          OTHERS        = 3.
+      IF sy-subrc <> 0.
+      ENDIF.
+
+*      READ TABLE lt_local_adrcon INTO DATA(ls_local_adrcon) INDEX 1.
+      IF lt_local_adrcon[] IS NOT INITIAL.
+
+        DATA(lt_guid_splat) = VALUE ty_rng_guid( FOR ls IN lt_local_adrcon
+                                     ( low = ls-guid_splat  ) ).
+        DATA(lo_spldata) = NEW zcl_gts_amdp_spldata( ).
+        "Get the SPL Hits Details
+        CALL METHOD lo_spldata->get_spl_data
+          EXPORTING
+            it_guid_tab = lt_guid_splat
+          IMPORTING
+            et_result   = DATA(lt_spladdrdet_results).
+
+        SORT lt_spladdrdet_results BY guid_audit guid_tspl guid_tspln.
+        DELETE ADJACENT DUPLICATES FROM lt_spladdrdet_results COMPARING guid_audit guid_tspl guid_tspln.
+
+        "Call AMDP to get the SPL Address Details against Optimized Audit Trail Guid
+*        DATA(lcl_spladdrdet) = NEW zcl_gts_amdp_ml_spladdrdet( ).
+*        lcl_spladdrdet->get_spl_data(
+*          EXPORTING
+*            iv_where = CONV #( ls_local_adrcon-guid_splat )
+*          IMPORTING
+*            et_result = DATA(lt_spladdrdet_results)
+*        ).
+      ENDIF.
+
+      "Populate the SPL Address Details to the Response Entity Set
+      LOOP AT lt_spladdrdet_results ASSIGNING FIELD-SYMBOL(<lfs_spladdrdet_results>).
+
+        ls_entity-spldatarefid = <lfs_spladdrdet_results>-spl_data_ref_id.
+        ls_entity-spllisttype = <lfs_spladdrdet_results>-spl_list_type.
+        ls_entity-splname = <lfs_spladdrdet_results>-spl_name.
+        ls_entity-spladdress = <lfs_spladdrdet_results>-spl_street.
+        ls_entity-splregion = <lfs_spladdrdet_results>-spl_po_region.
+        ls_entity-splcity = <lfs_spladdrdet_results>-spl_po_city.
+        ls_entity-splcountry = <lfs_spladdrdet_results>-spl_po_country.
+        ls_entity-splpobox = <lfs_spladdrdet_results>-spl_po_box.
+        ls_entity-alaunr = <lfs_spladdrdet_results>-alaunr.
+        ls_entity-nlaunr = <lfs_spladdrdet_results>-nlaunr.
+        INSERT ls_entity INTO TABLE et_entityset.
+      ENDLOOP.
+    ENDIF.
+
+    es_response_context-inlinecount = lines( et_entityset[] ).
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Protected Method ZCL_ZZGTS_MNG_BLKDBP_DPC_EXT->ZZSPLBLKDADDRHDR_GET_ENTITY
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_ENTITY_NAME                 TYPE        STRING
+* | [--->] IV_ENTITY_SET_NAME             TYPE        STRING
+* | [--->] IV_SOURCE_NAME                 TYPE        STRING
+* | [--->] IT_KEY_TAB                     TYPE        /IWBEP/T_MGW_NAME_VALUE_PAIR
+* | [--->] IO_REQUEST_OBJECT              TYPE REF TO /IWBEP/IF_MGW_REQ_ENTITY(optional)
+* | [--->] IO_TECH_REQUEST_CONTEXT        TYPE REF TO /IWBEP/IF_MGW_REQ_ENTITY(optional)
+* | [--->] IT_NAVIGATION_PATH             TYPE        /IWBEP/T_MGW_NAVIGATION_PATH
+* | [<---] ER_ENTITY                      TYPE        ZCL_ZZGTS_MNG_BLKDBP_MPC=>TS_ZZSPLBLKDADDRHDR
+* | [<---] ES_RESPONSE_CONTEXT            TYPE        /IWBEP/IF_MGW_APPL_SRV_RUNTIME=>TY_S_MGW_RESPONSE_ENTITY_CNTXT
+* | [!CX!] /IWBEP/CX_MGW_BUSI_EXCEPTION
+* | [!CX!] /IWBEP/CX_MGW_TECH_EXCEPTION
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD zzsplblkdaddrhdr_get_entity.
+*-----------------------------------------------------------------------
+* Creation Date(06/12/2025):
+* Author's Name (& User id): Fayez Kazi
+* Title                    : Manage Blocked Partners - Machine Learing
+* Technical Specification  : VAL-XXXXXXXX / BTEV-XXXXXX / SPEC-XXXXX
+* ER/IM                    :
+*-----------------------------------------------------------------------
+* Description:
+*-----------------------------------------------------------------------
+* As part of Custom oData service - ZZGTS_MNG_BLKDBP_SRV, this method
+* provides the Screening Results and Address data for Individual Business Partner.
+*----------------------------------------------------------------------*
+* Change Log
+*----------------------------------------------------------------------*
+* Change-Nr          User Name           Transport      Change Date
+* Description:
+* RFC2466528         KAZIF              DG1K912414     12-JUNE-2025
+* E4H - SPL ML Custom Fiori Application
+*----------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&  Method           ZZSPLBLKDADDRHDR_GET_ENTITY
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+
+
+    DATA: ls_crit         TYPE /sapsll/adrcon_crit_s,
+          ls_adrnr        TYPE /sapsll/adrnr_r_s,
+          ls_lgreg        TYPE /sapsll/lgreg_r_s,
+          lt_local_adrcon TYPE /sapsll/adrcon_t,
+          lt_ml_adrcon    TYPE /sapsll/adrcon_blocked_bp_t.
+    DATA: lv_partner TYPE bu_partner.
+
+    DATA(lo_api_obj) = NEW /sapsll/cl_api_spl_blkdbpaddr( ).
+
+    "Get the Key values (Business Partner, Address ID, Legal Reg.) from the Request
+    io_tech_request_context->get_converted_keys(
+      IMPORTING
+        es_key_values = er_entity
+    ).
+    "Get the Blocked Business Partner Address data against the Key values of Business Partner, Address ID
+    "and Legal Regulation and store the Screening Results and Address data to LT_RESULT
+    lo_api_obj->get_blocked_addr_header(
+          EXPORTING
+            iv_lgreg         = er_entity-legalregulation
+            iv_adrnr         = er_entity-addressid
+            iv_partner       = er_entity-businesspartner
+          IMPORTING
+            et_messages      = DATA(lt_messages)
+            es_blkdaddr_hdr  = DATA(ls_result)
+        ).
+    "Get the Reference Business Partners (such as Business Partner Type, Ext Business Partner,
+    "Logical sys group etc. )
+    lo_api_obj->get_ref_buspartners(
+          EXPORTING
+            iv_lgreg            = er_entity-legalregulation
+            iv_adrnr            = er_entity-addressid
+            iv_partner          = er_entity-businesspartner
+          IMPORTING
+            et_messages         = DATA(lt_ref_messages)
+            et_ref_buspartners  = DATA(lt_ref_result)
+        ).
+
+    "Collect the Address ID and Legal Regulation to get the Legal Control data of defined Address data of
+    "the Business Partner.
+    ls_adrnr-sign = ls_lgreg-sign = 'I'.
+    ls_adrnr-option = ls_lgreg-option = 'EQ'.
+    IF ls_result-adrnr IS NOT INITIAL.
+      ls_adrnr-low = ls_result-adrnr.
+      APPEND ls_adrnr TO ls_crit-adrnr.
+    ENDIF.
+    IF ls_result-lgreg IS NOT INITIAL.
+      ls_lgreg-low = ls_result-lgreg.
+      APPEND ls_lgreg TO ls_crit-lgreg.
+    ENDIF.
+
+    SORT ls_crit-lgreg BY low.
+    DELETE ADJACENT DUPLICATES FROM ls_crit-lgreg.
+    SORT ls_crit-adrnr BY low.
+    DELETE ADJACENT DUPLICATES FROM ls_crit-adrnr.
+
+    IF ls_crit-adrnr IS NOT INITIAL AND ls_crit-lgreg IS NOT INITIAL.
+      "Find the Legal Control data of the defined Address data
+      CALL FUNCTION '/SAPSLL/ADRCON_GET_OBJECT'
+        EXPORTING
+          is_crit       = ls_crit
+        IMPORTING
+          et_result     = lt_local_adrcon
+        EXCEPTIONS
+          invalid_call  = 1
+          missing_adrnr = 2
+          OTHERS        = 3.
+      IF sy-subrc <> 0.
+      ENDIF.
+
+      lt_ml_adrcon = VALUE #( FOR ls_local_adrcon IN lt_local_adrcon
+                            ( CORRESPONDING #( ls_local_adrcon ) ) ).
+      IF lt_ml_adrcon[] IS NOT INITIAL.
+        "Get the Machine Learning Scoring data
+        CALL FUNCTION 'ZGTS_BP_ML_GET_SCORING_DATA'
+          CHANGING
+            ct_adrcon         = lt_ml_adrcon
+          EXCEPTIONS
+            no_data_tab_found = 1
+            OTHERS            = 2.
+        IF sy-subrc <> 0.
+* Implement suitable error handling here
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
+    "For one Business Partner, there should be only one Ext Partner and Partner Type. So read the first
+    "entry of the Table to populate them.
+    READ TABLE lt_ref_result INTO DATA(ls_ref_results) INDEX 1.
+    IF sy-subrc = 0.
+      er_entity-extbusinesspartner = ls_ref_results-bpvsy.
+      er_entity-logicalsystemgroup = ls_ref_results-grvsy.
+      er_entity-businesspartnertype = ls_ref_results-bptyp.
+    ENDIF.
+
+    "Populate the Business Partner Address and Screening Results details
+    er_entity-cityname = ls_result-city_name.
+    er_entity-country = ls_result-country.
+    er_entity-countryname = ls_result-country_name.
+    er_entity-legalregulationname = ls_result-lgreg_name.
+    er_entity-screeningdate = ls_result-spl_chk_date.
+    er_entity-firstscreeningdate = ls_result-first_spl_date.
+    er_entity-splscreeningcheckstatus = ls_result-splcs.
+    er_entity-splscreeningcheckstatusname = ls_result-splcs_desc.
+    er_entity-splscrngcheckstatuscriticality = ls_result-splcs_crit.
+    er_entity-streetname = ls_result-street_name.
+    er_entity-businesspartnername = ls_result-part_desc.
+    er_entity-processor = ls_result-prosl.
+    er_entity-processstatus = ls_result-blkst.
+    er_entity-processstatusname = ls_result-blkst_desc.
+    er_entity-processorname = ls_result-prosl_desc.
+    er_entity-processcomment = ls_result-pscmt.
+    er_entity-actionisactive = ls_result-othac.
+    er_entity-splactionisactive = ls_result-splac.
+    er_entity-splscreeningblockisindirect = ls_result-splib.
+
+    "Populate the Machine Learning Scoring Data against Individual Business Partner
+    READ TABLE lt_ml_adrcon WITH KEY adrnr = ls_result-adrnr
+                                 lgreg = ls_result-lgreg
+                                 partner = ls_result-partner BINARY SEARCH
+                        INTO DATA(ls_ml_adrcon).
+    IF sy-subrc = 0.
+      er_entity-mlconf = ls_ml_adrcon-ml_conf.
+      er_entity-mlnamescore = ls_ml_adrcon-ml_name_score.
+      er_entity-mladdrscore = ls_ml_adrcon-ml_addr_score.
+      er_entity-mlpredresp = ls_ml_adrcon-ml_pred_resp.
+      er_entity-mlpreddate = ls_ml_adrcon-ml_pred_date.
+      er_entity-mlscorestatus = ls_ml_adrcon-ml_score_status.
+    ENDIF.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Protected Method ZCL_ZZGTS_MNG_BLKDBP_DPC_EXT->ZZSPLHITSDETAILS_GET_ENTITYSET
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_ENTITY_NAME                 TYPE        STRING
+* | [--->] IV_ENTITY_SET_NAME             TYPE        STRING
+* | [--->] IV_SOURCE_NAME                 TYPE        STRING
+* | [--->] IT_FILTER_SELECT_OPTIONS       TYPE        /IWBEP/T_MGW_SELECT_OPTION
+* | [--->] IS_PAGING                      TYPE        /IWBEP/S_MGW_PAGING
+* | [--->] IT_KEY_TAB                     TYPE        /IWBEP/T_MGW_NAME_VALUE_PAIR
+* | [--->] IT_NAVIGATION_PATH             TYPE        /IWBEP/T_MGW_NAVIGATION_PATH
+* | [--->] IT_ORDER                       TYPE        /IWBEP/T_MGW_SORTING_ORDER
+* | [--->] IV_FILTER_STRING               TYPE        STRING
+* | [--->] IV_SEARCH_STRING               TYPE        STRING
+* | [--->] IO_TECH_REQUEST_CONTEXT        TYPE REF TO /IWBEP/IF_MGW_REQ_ENTITYSET(optional)
+* | [<---] ET_ENTITYSET                   TYPE        ZCL_ZZGTS_MNG_BLKDBP_MPC=>TT_ZZSPLHITSDETAIL
+* | [<---] ES_RESPONSE_CONTEXT            TYPE        /IWBEP/IF_MGW_APPL_SRV_RUNTIME=>TY_S_MGW_RESPONSE_CONTEXT
+* | [!CX!] /IWBEP/CX_MGW_BUSI_EXCEPTION
+* | [!CX!] /IWBEP/CX_MGW_TECH_EXCEPTION
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD zzsplhitsdetails_get_entityset.
+*-----------------------------------------------------------------------
+* Creation Date(06/12/2025):
+* Author's Name (& User id): Fayez Kazi
+* Title                    : Manage Blocked Partners - Machine Learing
+* Technical Specification  : VAL-XXXXXXXX / BTEV-XXXXXX / SPEC-XXXXX
+* ER/IM                    :
+*-----------------------------------------------------------------------
+* Description:
+*-----------------------------------------------------------------------
+* As part of Custom oData service - ZZGTS_MNG_BLKDBP_SRV, this method
+* provides the List of SPL Hits List against the Blocked Business Partners.
+*----------------------------------------------------------------------*
+* Change Log
+*----------------------------------------------------------------------*
+* Change-Nr          User Name           Transport      Change Date
+* Description:
+* RFC2466528         KAZIF              DG1K912414     12-JUNE-2025
+* E4H - SPL ML Custom Fiori Application
+*----------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&  Method           ZZSPLHITSDETAILS_GET_ENTITYSET
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+
+
+    TYPES: ty_rng_guid TYPE RANGE OF /sapsll/guid_16.
+
+    TYPES: BEGIN OF ty_multi_check,
+             adrnr           TYPE adrnr,
+             lgreg           TYPE /sapsll/lgreg_n,
+             partner         TYPE bu_partner,
+             spl_data_ref_id TYPE /sapsll/exspl,
+           END OF ty_multi_check.
+
+    DATA: ls_multi_check  TYPE ty_multi_check,
+          lt_multi_check  TYPE SORTED TABLE OF ty_multi_check
+           WITH NON-UNIQUE KEY adrnr, lgreg, partner, spl_data_ref_id.
+
+    DATA(lo_api_obj) = NEW /sapsll/cl_api_spl_blkdbpaddr( ).
+    DATA: lt_rng_addressid TYPE /iwbep/t_cod_select_options,
+          lt_rng_lgreg     TYPE /iwbep/t_cod_select_options,
+          lt_rng_partner   TYPE /iwbep/t_cod_select_options.
+
+    DATA: lv_partner   TYPE bu_partner,
+          lv_addressid TYPE adrnr,
+          lv_no_auth   TYPE xfeld,
+          ls_par_crit  TYPE /sapsll/spl_opt_at_par_crit_s,
+          ls_partner   TYPE /sapsll/bu_partner_r_s,
+          ls_at_crit   TYPE /sapsll/spl_opt_at_crit_s,
+          ls_lgreg     TYPE /sapsll/lgreg_r_s,
+          ls_mandt     TYPE /sapsll/mandt_r_s,
+          ls_adrnr     TYPE /sapsll/adrnr_r_s,
+          "lt_splatm    TYPE /sapsll/splatm_ht,
+          lt_audit_ui  TYPE /sapsll/spl_opt_at_ui_t,
+          lt_spl_ui    TYPE /sapsll/spl_opt_spl_ui_t,
+          lt_spl_hits  TYPE /sapsll/splhits_detail_t,
+          ls_result    TYPE zcl_zzlls_bpaddrscrngr_mpc=>ts_zzsplhitsdetail,
+          lt_result    TYPE zcl_zzlls_bpaddrscrngr_mpc=>tt_zzsplhitsdetail,
+          ls_entity    TYPE zcl_zzlls_bpaddrscrngr_mpc=>ts_zzsplhitsdetail,
+          ls_crit      TYPE /sapsll/adrcon_crit_s,
+          lt_msg       TYPE bapiret2_t.
+
+    "DATA ls_adrcon      TYPE /sapsll/adrcon.
+    DATA lt_adrcon      TYPE /sapsll/adrcon_t.
+    DATA ls_blkd_addr   TYPE /sapsll/blocked_bp_s.
+    DATA lt_blkd_addr   TYPE /sapsll/blocked_bp_t.
+
+    DATA: ls_filters  TYPE   /sapsll/blkdaddr_filter_s.
+
+    "Get the Filter Data
+    me->get_filter( EXPORTING
+                        io_filter = io_tech_request_context->get_filter( )
+                    IMPORTING
+                        es_filter = ls_filters  ).
+
+    "Get the List of Blocked Partners based on the Filter data
+    lo_api_obj->get_blocked_addr(
+                EXPORTING  is_filters  = ls_filters
+                IMPORTING  et_blkdaddr = DATA(lt_blocked_bp)  ).
+    SORT lt_blocked_bp BY adrnr lgreg partner.
+
+    LOOP AT ls_filters-businesspartner ASSIGNING FIELD-SYMBOL(<fs>).
+      lv_partner = <fs>-low.
+      <fs>-low = |{ lv_partner ALPHA = IN }|.
+    ENDLOOP.
+    UNASSIGN <fs>.
+    LOOP AT ls_filters-addressid ASSIGNING <fs>.
+      lv_addressid = <fs>-low.
+      <fs>-low = |{ lv_addressid ALPHA = IN }|.
+    ENDLOOP.
+    ls_crit-adrnr = ls_filters-addressid.
+    ls_crit-lgreg = ls_filters-legalregulation.
+
+    ls_mandt-low = sy-mandt.
+    ls_mandt-sign = 'I'.
+    ls_mandt-option = 'EQ'.
+    APPEND ls_mandt TO ls_crit-mandt.
+
+    "Get the Address data of the Filtered Business Partners and store the results into LT_ADRCON
+    CALL FUNCTION '/SAPSLL/ADRCON_GET_OBJECT'
+      EXPORTING
+        is_crit       = ls_crit
+      IMPORTING
+        et_result     = lt_adrcon
+      EXCEPTIONS
+        invalid_call  = 1
+        missing_adrnr = 2
+        OTHERS        = 3.
+    IF sy-subrc <> 0.
+* Implement suitable error handling here
+    ENDIF.
+
+    IF lt_adrcon[] IS NOT INITIAL.
+      DATA(lt_guid_splat) = VALUE ty_rng_guid( FOR ls IN lt_adrcon
+                                   ( low = ls-guid_splat  ) ).
+      DATA(lo_spldata) = NEW zcl_gts_amdp_spldata( ).
+      "Get the SPL Hits Details
+      CALL METHOD lo_spldata->get_spl_data
+        EXPORTING
+          it_guid_tab = lt_guid_splat
+        IMPORTING
+          et_result   = DATA(lt_spldata).
+      DATA(lt_spldata_multichk) = lt_spldata.
+      SORT lt_spldata BY guid_audit guid_tspln.
+      DELETE ADJACENT DUPLICATES FROM lt_spldata COMPARING guid_audit guid_tspln.
+      SORT lt_spldata_multichk BY guid_audit guid_tspl guid_tspln.
+      DELETE ADJACENT DUPLICATES FROM lt_spldata_multichk COMPARING guid_audit guid_tspl guid_tspln.
+
+      "Get the /SAPSLL/SPLATM
+      SELECT guid_audit, launr, guid_pobj, guid_tspl, spl_kw_origin, mch_kws, score
+        FROM /sapsll/splatm
+        FOR ALL ENTRIES IN @lt_guid_splat
+         WHERE guid_audit = @lt_guid_splat-low
+        ORDER BY PRIMARY KEY
+        INTO TABLE @DATA(lt_splatm).
+      IF sy-subrc = 0.
+        SORT lt_splatm BY guid_audit guid_tspl.
+        DELETE ADJACENT DUPLICATES FROM lt_splatm COMPARING guid_audit guid_tspl.
+      ENDIF.
+
+      "Get Business Partner Address
+      SELECT businesspartner, addressnumber, fullname, streetname, cityname, country, region
+            FROM i_businesspartneraddress
+            WHERE businesspartner IN @ls_filters-businesspartner AND
+                  addressnumber IN @ls_filters-addressid
+            ORDER BY businesspartner,addressnumber
+            INTO TABLE @DATA(lt_blocked_bp_addr).
+      IF sy-subrc = 0.
+      ENDIF.
+    ENDIF.
+
+    SORT lt_adrcon BY adrnr lgreg.
+    "Loop at Blocked Partner List
+    LOOP AT lt_blocked_bp ASSIGNING FIELD-SYMBOL(<lfs_blocked_bp>).
+      "Get the Blocked Partner's Legal Control for Dervived Address Data
+      READ TABLE lt_adrcon WITH KEY adrnr = <lfs_blocked_bp>-adrnr
+                                    lgreg = <lfs_blocked_bp>-lgreg BINARY SEARCH
+                                    INTO DATA(ls_adrcon).
+      IF sy-subrc = 0.
+        "Find the SPL details against the Legal Control data of the derived address of the Partner
+        READ TABLE lt_splatm WITH KEY guid_audit = ls_adrcon-guid_splat BINARY SEARCH
+        TRANSPORTING NO FIELDS.
+        IF sy-subrc = 0.
+          DATA(lv_splatm_tabix) = sy-tabix.
+          LOOP AT lt_splatm INTO DATA(ls_splatm) FROM lv_splatm_tabix.
+            IF ls_splatm-guid_audit NE ls_adrcon-guid_splat.
+              EXIT.
+            ENDIF.
+
+            READ TABLE lt_spldata_multichk WITH KEY guid_audit = ls_splatm-guid_audit
+                                                    guid_tspl  = ls_splatm-guid_tspl BINARY SEARCH
+            TRANSPORTING NO FIELDS.
+            IF sy-subrc = 0.
+              DATA(lv_spldata_multi_tabix) = sy-tabix.
+              "For every SPL Records find the every SPL Details
+              LOOP AT lt_spldata_multichk INTO DATA(ls_spldata) FROM lv_spldata_multi_tabix.
+                IF ls_spldata-guid_audit = ls_splatm-guid_audit AND
+                   ls_spldata-guid_tspl = ls_splatm-guid_tspl.
+                ELSE.
+                  EXIT.
+                ENDIF.
+                "Check for every Partner Address Legal Reg, for every SPL Number if there is
+                "Multiple details exists, then set MultiNameAddr as 'Yes', otherwise set 'No'.
+                READ TABLE lt_multi_check WITH KEY adrnr = ls_adrcon-adrnr
+                                            lgreg = ls_adrcon-lgreg
+                                            partner = <lfs_blocked_bp>-partner
+                                            spl_data_ref_id = ls_spldata-spl_data_ref_id
+                                            TRANSPORTING NO FIELDS.
+                IF sy-subrc = 0.
+                  ls_result-multi_name_addr = 'YES'.
+                  EXIT.
+                ELSE.
+                  ls_multi_check-adrnr = ls_adrcon-adrnr.
+                  ls_multi_check-lgreg = ls_adrcon-lgreg.
+                  ls_multi_check-partner = <lfs_blocked_bp>-partner.
+                  ls_multi_check-spl_data_ref_id = ls_spldata-spl_data_ref_id.
+                  INSERT ls_multi_check INTO TABLE lt_multi_check.
+                  CLEAR: ls_multi_check.
+                ENDIF.
+              ENDLOOP.
+            ENDIF.
+            "For every SPL Header Records find the every SPL Details
+            READ TABLE lt_spldata WITH KEY guid_audit = ls_splatm-guid_audit
+                                          guid_tspln = ls_splatm-guid_pobj BINARY SEARCH
+                                          TRANSPORTING NO FIELDS.
+            IF sy-subrc = 0.
+              DATA(lv_spldata_tabix) = sy-tabix.
+              LOOP AT lt_spldata INTO ls_spldata FROM lv_spldata_tabix.
+                IF ls_spldata-guid_audit = ls_splatm-guid_audit AND
+                   ls_spldata-guid_tspln = ls_splatm-guid_pobj.
+
+                  ls_result-spllisttype = ls_spldata-spl_list_type.
+                  ls_result-splnumber = ls_spldata-spl_data_ref_id.
+                  ls_result-splprovidername = ls_spldata-spl_provider_id.
+                  ls_result-nlaunr = ls_spldata-nlaunr.
+                  ls_result-alaunr = ls_spldata-alaunr.
+
+                  IF ls_splatm-spl_kw_origin = 'N1'.
+                    ls_result-spl_name = ls_spldata-spl_name.
+                    ls_result-spl_mch_kws  = ls_splatm-mch_kws.
+                    ls_result-spl_name_score = ls_splatm-score.
+                  ENDIF.
+                  IF ls_splatm-spl_kw_origin = 'S1'.
+                    ls_result-spl_address = ls_spldata-spl_street.
+                    ls_result-spl_city = ls_spldata-spl_po_city.
+                    ls_result-spl_region = ls_spldata-spl_po_region.
+                    ls_result-spl_country = ls_spldata-spl_po_country.
+                    ls_result-spl_po_box = ls_spldata-spl_po_box.
+                    ls_result-spl_mch_kws = ls_splatm-mch_kws.
+                    ls_result-spl_addr_score = ls_splatm-score.
+                  ENDIF.
+
+                  ls_result-addressid = ls_adrcon-adrnr.
+                  ls_result-legalregulation = ls_adrcon-lgreg.
+                  ls_result-businesspartner = <lfs_blocked_bp>-partner.
+
+                  ls_result-extbusinesspartner = <lfs_blocked_bp>-bpvsy.
+                  ls_result-businesspartnertype = <lfs_blocked_bp>-bptyp.
+                  ls_result-logicalsystemgroup = <lfs_blocked_bp>-grvsy.
+                  ls_result-buspartnertypename = <lfs_blocked_bp>-bptyp_desc.
+
+                  "Populate the Business Partner Address data
+                  READ TABLE lt_blocked_bp_addr WITH KEY addressnumber = <lfs_blocked_bp>-adrnr
+                                               businesspartner = <lfs_blocked_bp>-partner BINARY SEARCH
+                                               INTO DATA(ls_blocked_bp_addr).
+                  IF sy-subrc = 0.
+                    ls_result-bpname = ls_blocked_bp_addr-fullname.
+                    ls_result-bpaddress = ls_blocked_bp_addr-streetname.
+                    ls_result-bpcountry = ls_blocked_bp_addr-country.
+                    ls_result-bpregion = ls_blocked_bp_addr-region.
+                    ls_result-bpcity = ls_blocked_bp_addr-cityname.
+                  ENDIF.
+
+                  IF ls_result-multi_name_addr IS INITIAL.
+                    ls_result-multi_name_addr = 'NO'.
+                    ls_result-spl_name = ls_spldata-spl_name.
+                    ls_result-spl_address = ls_spldata-spl_street.
+                    ls_result-spl_city = ls_spldata-spl_po_city.
+                    ls_result-spl_region = ls_spldata-spl_po_region.
+                    ls_result-spl_country = ls_spldata-spl_po_country.
+                    ls_result-spl_po_box = ls_spldata-spl_po_box.
+                  ENDIF.
+
+                  APPEND ls_result TO lt_result.
+                  CLEAR ls_result.
+                ELSE.
+                  EXIT.
+                ENDIF.
+              ENDLOOP.
+            ENDIF.
+          ENDLOOP.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+
+    IF lt_result[] IS NOT INITIAL.
+      SORT lt_result BY businesspartner addressid legalregulation spllisttype splnumber.
+      DELETE ADJACENT DUPLICATES FROM lt_result
+      COMPARING businesspartner addressid legalregulation spllisttype splnumber.
+      APPEND LINES OF lt_result TO et_entityset.
+    ENDIF.
+
+    es_response_context-inlinecount = lines( et_entityset ).
+
+* provide count if requested
+    DATA(lv_has_count) = io_tech_request_context->has_count( ).
+    IF ( lv_has_count EQ abap_true ).
+      es_response_context-count = lines( et_entityset ).
+    ENDIF.
+
+    IF io_tech_request_context->get_orderby( ) IS NOT INITIAL.
+      me->apply_orderby(
+        EXPORTING
+          it_order = io_tech_request_context->get_orderby( )
+        CHANGING
+          ct_data  = et_entityset ).
+    ENDIF.
+
+*    ENDIF.
+
+    "Ensure that the App users are using the proper filters to get the SPL Hits data
+    IF it_filter_select_options[] IS NOT INITIAL.
+*      "Find the Business Partner, Address ID and Legal Regulation filters
+*      lt_rng_addressid[] = VALUE #( it_filter_select_options[ property = 'AddressID' ]-select_options ).
+*      lt_rng_lgreg[] = VALUE #( it_filter_select_options[ property = 'LegalRegulation' ]-select_options ).
+*      lt_rng_partner[] = VALUE #( it_filter_select_options[ property = 'BusinessPartner' ]-select_options ).
+*
+*      "Collect and convert the Business Partners, Legal Regulations and Address IDs to get the Legal
+*      "control data of define Address data of the filtered Business Partners.
+*      SORT lt_rng_partner BY low.
+*      DELETE ADJACENT DUPLICATES FROM lt_rng_partner COMPARING low.
+*      LOOP AT lt_rng_partner ASSIGNING FIELD-SYMBOL(<ls_rng_partner>).
+*        lv_partner = <ls_rng_partner>-low.
+*        <ls_rng_partner>-low = |{ lv_partner ALPHA = IN }|.
+*        ls_partner-low = <ls_rng_partner>-low.
+*        ls_partner-sign = <ls_rng_partner>-sign.
+*        ls_partner-option = <ls_rng_partner>-option.
+*        APPEND ls_partner TO ls_par_crit-partner.
+*      ENDLOOP.
+*
+*      SORT lt_rng_lgreg BY low.
+*      DELETE ADJACENT DUPLICATES FROM lt_rng_lgreg COMPARING low.
+*      LOOP AT lt_rng_lgreg INTO DATA(ls_rng_lgreg).
+*        ls_lgreg-sign = ls_rng_lgreg-sign.
+*        ls_lgreg-option = ls_rng_lgreg-option.
+*        ls_lgreg-low = ls_rng_lgreg-low.
+*        APPEND ls_lgreg TO ls_at_crit-lgreg.
+*        APPEND ls_lgreg TO ls_crit-lgreg.
+*      ENDLOOP.
+*
+*      SORT lt_rng_addressid BY low.
+*      DELETE ADJACENT DUPLICATES FROM lt_rng_addressid COMPARING low.
+*      LOOP AT lt_rng_addressid ASSIGNING FIELD-SYMBOL(<lfs_rng_addressid>).
+*        lv_addressid = <lfs_rng_addressid>-low.
+*        <lfs_rng_addressid>-low = |{ lv_addressid ALPHA = IN }|.
+*        ls_adrnr-low =  <lfs_rng_addressid>-low.
+*        ls_adrnr-sign = <lfs_rng_addressid>-sign.
+*        ls_adrnr-option = <lfs_rng_addressid>-option.
+*        APPEND ls_adrnr TO ls_crit-adrnr.
+*      ENDLOOP.
+
+
+      "Read Optimized Audit Trails for Business Partner Screening
+*      CALL FUNCTION '/SAPSLL/SPL_OPT_AT_BP_READ'
+*        EXPORTING
+*          is_at_crit  = ls_at_crit
+*          is_par_crit = ls_par_crit
+*          iv_archive  = abap_false
+*        IMPORTING
+*          et_audit_ui = lt_audit_ui
+*          et_splatm   = lt_splatm
+*          et_spl_ui   = lt_spl_ui
+*          ev_no_auth  = lv_no_auth.
+*      IF lv_no_auth IS NOT INITIAL.
+**          MESSAGE s023(/sapsll/con_spl_list) WITH sy-uname.
+**          me->add_message( CHANGING et_messages = et_messages ).
+*      ENDIF.
+
+*      SORT lt_spl_ui BY guid_splat guid_pobj.
+*      DELETE ADJACENT DUPLICATES FROM lt_spl_ui COMPARING guid_splat guid_pobj. "only keep one entry per TSPLN/TSPLA
+*
+*      "Get the BP Addresses based on the Filtered Business Partners and Address IDs
+*      IF lt_rng_partner[] IS NOT INITIAL AND lt_rng_addressid[] IS NOT INITIAL.
+*        SELECT businesspartner, addressnumber, fullname, streetname, cityname, country, region
+*          FROM i_businesspartneraddress
+*          WHERE businesspartner IN @lt_rng_partner AND
+*                addressnumber IN @lt_rng_addressid
+*          ORDER BY businesspartner,addressnumber
+*          INTO TABLE @DATA(lt_blkaddr_t).
+*        IF sy-subrc = 0.
+*        ENDIF.
+*      ENDIF.
+*
+*      LOOP AT lt_spl_ui ASSIGNING FIELD-SYMBOL(<ls_spl_hit>).
+*        READ TABLE lt_adrcon WITH KEY guid_splat = <ls_spl_hit>-guid_splat
+*        INTO ls_adrcon.
+*        IF sy-subrc = 0.
+*          "Get the SPL Number, SPL List Type, Matched Name and Address etc
+*          lo_api_obj->highlight_matched_terms_in_spl(
+*            EXPORTING
+*              it_splatm            = lt_splatm
+*              is_spl_audit_dtl     = <ls_spl_hit>
+*              iv_guid_splat        = <ls_spl_hit>-guid_splat
+*            CHANGING
+*              et_spl_hits          =  lt_spl_hits
+*              et_messages          =  lt_msg ).
+*
+*          IF lt_spl_hits[] IS NOT INITIAL.
+*            READ TABLE lt_audit_ui WITH KEY guid_splat = <ls_spl_hit>-guid_splat
+*              INTO DATA(ls_audit_ui).
+*            IF sy-subrc = 0.
+*              LOOP AT lt_spl_hits ASSIGNING FIELD-SYMBOL(<ls_spl_hits>).
+*                "Populate the Business Partner, Address ID and Legal Reg. from Legal Control data
+*                ls_result-addressid = ls_adrcon-adrnr.
+*                ls_result-legalregulation = ls_adrcon-lgreg.
+*                ls_result-businesspartner = ls_audit_ui-partner.
+*                "Populate the BP Address data (Name, Street, City, Region, Country etc)
+*                READ TABLE lt_blkaddr_t INTO DATA(ls_blkaddr) WITH KEY
+*                    businesspartner = ls_result-businesspartner
+*                    addressnumber = ls_result-addressid  BINARY SEARCH.
+*                IF sy-subrc = 0.
+*                  ls_result-bpname = ls_blkaddr-fullname.
+*                  ls_result-bpaddress = ls_blkaddr-streetname.
+*                  ls_result-bpcountry = ls_blkaddr-country.
+*                  ls_result-bpregion = ls_blkaddr-region.
+*                  ls_result-bpcity = ls_blkaddr-cityname.
+*                ENDIF.
+*                "Populate the Terms, Name Score, Name Sequence Number incase of Name Matches
+*                READ TABLE lt_splatm ASSIGNING FIELD-SYMBOL(<lfs_splatm>)
+*                               WITH KEY guid_audit = <ls_spl_hit>-guid_splat
+*                                        guid_pobj = <ls_spl_hit>-guid_pobj
+*                                        spl_kw_origin = 'N1'.
+**                                 binary search.
+*                IF sy-subrc IS INITIAL.
+*                  ls_result-spl_mch_kws  = <lfs_splatm>-mch_kws.
+*                  ls_result-spl_name_score = <lfs_splatm>-score.
+*                  ls_result-nlaunr = <ls_spl_hit>-launr.
+*                ENDIF.
+*                "Populate the Terms, SPL Address Score, Address Sequence Number in case of Address Matches
+*                READ TABLE lt_splatm ASSIGNING <lfs_splatm>
+*                               WITH KEY guid_audit = <ls_spl_hit>-guid_splat
+*                                        guid_pobj = <ls_spl_hit>-guid_pobj
+*                                        spl_kw_origin = 'C1'.
+*                IF sy-subrc IS INITIAL.
+*                  ls_result-spl_mch_kws    = <lfs_splatm>-mch_kws.
+*                  ls_result-spl_addr_score = <lfs_splatm>-score.
+*                  ls_result-alaunr = <lfs_splatm>-launr.
+*                ENDIF.
+*
+*                ls_result-matchedaddress = <ls_spl_hits>-addr.
+*                ls_result-matchedname = <ls_spl_hits>-name.
+*                ls_result-spllisttype = <ls_spl_hits>-spl_list_type.
+*                ls_result-spllisttypedesc = <ls_spl_hits>-spl_list_type_desc.
+*                ls_result-splnumber = <ls_spl_hits>-spl_data_ref_id.
+*                ls_result-splprovidername = <ls_spl_hits>-spl_provider.
+*                ls_result-splproviderdesc = <ls_spl_hits>-spl_provider_desc.
+*
+**                ls_result-spl_address = 'Lane 468, Xinsiping Highway Shanghai'.
+**                ls_result-spl_city = 'Shanghai'.
+**                ls_result-spl_region = 'CN'.
+**                ls_result-spl_country = 'CN'.
+**                ls_result-spl_po_box = '579'.
+*                "ls_result-spl_mch_kws = 'CHEMICALS CO LTD'.
+*
+*                APPEND ls_result TO lt_result.
+*                CLEAR: ls_result.
+*              ENDLOOP.
+*            ENDIF.
+*          ENDIF.
+*          CLEAR: lt_spl_hits, lt_msg.
+*        ENDIF.
+*      ENDLOOP.
+*
+*      "Get the Filters from the Request data
+*      me->get_filter( EXPORTING
+*                      io_filter = io_tech_request_context->get_filter( )
+*                  IMPORTING
+*                      es_filter = ls_filters  ).
+*
+*      "Get the List of Blocked Partners based on the Filter data
+*      lo_api_obj->get_blocked_addr(
+*                  EXPORTING  is_filters  = ls_filters
+*                  IMPORTING  et_blkdaddr = DATA(lt_blocked_bp)  ).
+*      SORT lt_blocked_bp BY adrnr lgreg partner.
+*
+*      "Now check the SPL Hits List BPs are Blocked Business Partners. If blocked, then only
+*      "the record will be populated into the result entitySet, otherwise the data will
+*      "be ignored.
+*      LOOP AT lt_result ASSIGNING FIELD-SYMBOL(<ls_result>).
+*        READ TABLE lt_blocked_bp WITH KEY
+*                    adrnr = <ls_result>-addressid
+*                    lgreg = <ls_result>-legalregulation
+*                    partner = <ls_result>-businesspartner BINARY SEARCH
+*                    TRANSPORTING NO FIELDS.
+*        IF sy-subrc = 0.
+*          ls_entity = <ls_result>.
+*          INSERT ls_entity INTO TABLE et_entityset.
+*        ENDIF.
+*      ENDLOOP.
+
+*      es_response_context-inlinecount = lines( et_entityset ).
+*
+** provide count if requested
+*      DATA(lv_has_count) = io_tech_request_context->has_count( ).
+*      IF ( lv_has_count EQ abap_true ).
+*        es_response_context-count = lines( et_entityset ).
+*      ENDIF.
+*
+*      IF io_tech_request_context->get_orderby( ) IS NOT INITIAL.
+*        me->apply_orderby(
+*          EXPORTING
+*            it_order = io_tech_request_context->get_orderby( )
+*          CHANGING
+*            ct_data  = et_entityset ).
+*      ENDIF.
+
+    ENDIF.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Protected Method ZCL_ZZGTS_MNG_BLKDBP_DPC_EXT->ZZSPLSCRNGBLKDPA_GET_ENTITYSET
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IV_ENTITY_NAME                 TYPE        STRING
+* | [--->] IV_ENTITY_SET_NAME             TYPE        STRING
+* | [--->] IV_SOURCE_NAME                 TYPE        STRING
+* | [--->] IT_FILTER_SELECT_OPTIONS       TYPE        /IWBEP/T_MGW_SELECT_OPTION
+* | [--->] IS_PAGING                      TYPE        /IWBEP/S_MGW_PAGING
+* | [--->] IT_KEY_TAB                     TYPE        /IWBEP/T_MGW_NAME_VALUE_PAIR
+* | [--->] IT_NAVIGATION_PATH             TYPE        /IWBEP/T_MGW_NAVIGATION_PATH
+* | [--->] IT_ORDER                       TYPE        /IWBEP/T_MGW_SORTING_ORDER
+* | [--->] IV_FILTER_STRING               TYPE        STRING
+* | [--->] IV_SEARCH_STRING               TYPE        STRING
+* | [--->] IO_TECH_REQUEST_CONTEXT        TYPE REF TO /IWBEP/IF_MGW_REQ_ENTITYSET(optional)
+* | [<---] ET_ENTITYSET                   TYPE        ZCL_ZZGTS_MNG_BLKDBP_MPC=>TT_ZZSPLSCRNGBLKDPARTNERADDRES
+* | [<---] ES_RESPONSE_CONTEXT            TYPE        /IWBEP/IF_MGW_APPL_SRV_RUNTIME=>TY_S_MGW_RESPONSE_CONTEXT
+* | [!CX!] /IWBEP/CX_MGW_BUSI_EXCEPTION
+* | [!CX!] /IWBEP/CX_MGW_TECH_EXCEPTION
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD zzsplscrngblkdpa_get_entityset.
+*-----------------------------------------------------------------------
+* Creation Date(06/12/2025):
+* Author's Name (& User id): Fayez Kazi
+* Title                    : Manage Blocked Partners - Machine Learing
+* Technical Specification  : VAL-XXXXXXXX / BTEV-XXXXXX / SPEC-XXXXX
+* ER/IM                    :
+*-----------------------------------------------------------------------
+* Description:
+*-----------------------------------------------------------------------
+* As part of Custom oData service - ZZGTS_MNG_BLKDBP_SRV, this method
+* provides the List of Blocked Business Partners based on filters.
+*----------------------------------------------------------------------*
+* Change Log
+*----------------------------------------------------------------------*
+* Change-Nr          User Name           Transport      Change Date
+* Description:
+* RFC2466528         KAZIF              DG1K912414     12-JUNE-2025
+* E4H - SPL ML Custom Fiori Application
+*----------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&  Method           ZZSPLSCRNGBLKDPA_GET_ENTITYSET
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+
+
+    DATA: ls_key_value              TYPE   lls_splblkdaddr_hdr_s,
+          lt_filters                TYPE   /iwbep/t_mgw_select_option,
+          ls_filter_addressid       TYPE   /iwbep/s_mgw_select_option,
+          ls_filter_legalregulation TYPE   /iwbep/s_mgw_select_option,
+          ls_filter_businesspartner TYPE   /iwbep/s_mgw_select_option,
+          lv_skip_i                 TYPE   int4,
+          lv_skip                   TYPE   string,
+          lv_top                    TYPE   string,
+          ls_filters                TYPE   /sapsll/blkdaddr_filter_s,
+          ls_entity                 LIKE LINE OF et_entityset.
+
+    DATA: ls_crit         TYPE /sapsll/adrcon_crit_s,
+          ls_adrnr        TYPE /sapsll/adrnr_r_s,
+          ls_lgreg        TYPE /sapsll/lgreg_r_s,
+          lt_local_adrcon TYPE /sapsll/adrcon_t,
+          lt_ml_adrcon    TYPE /sapsll/adrcon_blocked_bp_t.
+
+    DATA: lv_partner TYPE bu_partner.
+
+    DATA: ls_ml_filters TYPE ty_ml_blkdbpaddr.
+
+    "Initiate the Helper Class
+    DATA(lo_api_obj) = NEW /sapsll/cl_api_spl_blkdbpaddr( ).
+    "Get the Basic Filters used in the App (except the ML Filters)
+    me->get_filter( EXPORTING
+                        io_filter = io_tech_request_context->get_filter( )
+                    IMPORTING
+                        es_filter = ls_filters  ).
+
+    "Convert the Business Partner using conversion routine
+    LOOP AT ls_filters-businesspartner ASSIGNING FIELD-SYMBOL(<lfs>).
+      IF <lfs>-low IS NOT INITIAL.
+        <lfs>-low = |{ <lfs>-low ALPHA = IN }|.
+      ENDIF.
+      IF <lfs>-high IS NOT INITIAL.
+        <lfs>-high = |{ <lfs>-high ALPHA = IN }|.
+      ENDIF.
+    ENDLOOP.
+
+    "Get the Blocked Partners using the Filter data
+    lo_api_obj->get_blocked_addr(
+                    EXPORTING  is_filters  = ls_filters
+                    IMPORTING  et_blkdaddr = DATA(lt_result)  ).
+
+    "Based on the List of Blocked Partners, now find the Machine Learning Scoring --
+    "First collect the unique Address Numbers and Legal Regulations to find the defined Address data
+    "of the blocked business partners.
+    "Then based on the data, find the Machine Learning Scoring
+    LOOP AT lt_result ASSIGNING FIELD-SYMBOL(<fs_result>).
+      ls_adrnr-sign = ls_lgreg-sign = 'I'.
+      ls_adrnr-option = ls_lgreg-option = 'EQ'.
+      IF <fs_result>-adrnr IS NOT INITIAL.
+        ls_adrnr-low = <fs_result>-adrnr.
+        APPEND ls_adrnr TO ls_crit-adrnr.
+      ENDIF.
+      IF <fs_result>-lgreg IS NOT INITIAL.
+        ls_lgreg-low = <fs_result>-lgreg.
+        APPEND ls_lgreg TO ls_crit-lgreg.
+      ENDIF.
+    ENDLOOP.
+    SORT ls_crit-lgreg BY low.
+    DELETE ADJACENT DUPLICATES FROM ls_crit-lgreg.
+    SORT ls_crit-adrnr BY low.
+    DELETE ADJACENT DUPLICATES FROM ls_crit-adrnr.
+
+    IF ls_crit-adrnr IS NOT INITIAL AND ls_crit-lgreg IS NOT INITIAL.
+      CALL FUNCTION '/SAPSLL/ADRCON_GET_OBJECT'
+        EXPORTING
+          is_crit       = ls_crit
+        IMPORTING
+          et_result     = lt_local_adrcon
+        EXCEPTIONS
+          invalid_call  = 1
+          missing_adrnr = 2
+          OTHERS        = 3.
+      IF sy-subrc <> 0.
+      ENDIF.
+
+      lt_ml_adrcon = VALUE #( FOR ls_local_adrcon IN lt_local_adrcon
+                            ( CORRESPONDING #( ls_local_adrcon ) ) ).
+      IF lt_ml_adrcon[] IS NOT INITIAL.
+        "Get the Machine Learning Scoring
+        CALL FUNCTION 'ZGTS_BP_ML_GET_SCORING_DATA'
+          CHANGING
+            ct_adrcon         = lt_ml_adrcon
+          EXCEPTIONS
+            no_data_tab_found = 1
+            OTHERS            = 2.
+        IF sy-subrc <> 0.
+* Implement suitable error handling here
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
+    "Now populate the EntitySet from the Blocked Business Partner List, also populate the Machine Learning
+    "scoring data.
+    LOOP AT lt_result ASSIGNING FIELD-SYMBOL(<ls_result>).
+      ls_entity-addressid = <ls_result>-adrnr.
+      ls_entity-legalregulation = <ls_result>-lgreg.
+      ls_entity-legalregulationname = <ls_result>-lgreg_name.
+      lv_partner = <ls_result>-partner. "Store the BP Numbers (Internal Format with leading zeros)
+      <ls_result>-partner = |{ <ls_result>-partner ALPHA = OUT }|.
+      ls_entity-businesspartner = <ls_result>-partner.
+      ls_entity-businesspartnername = <ls_result>-part_desc.
+      ls_entity-country = <ls_result>-country.
+      ls_entity-countryname = <ls_result>-country_name.
+      ls_entity-cityname = <ls_result>-city_name.
+      ls_entity-streetname = <ls_result>-street_name.
+      ls_entity-splblockprocessingstatus = <ls_result>-blkst.
+      ls_entity-splblockprocessingstatusdesc = <ls_result>-blkst_desc.
+      ls_entity-processor = <ls_result>-prosl.
+      ls_entity-personfullname = <ls_result>-prosl_desc.
+      ls_entity-splcheckdatetime = <ls_result>-spl_chk_time.
+      ls_entity-splcheckdate = <ls_result>-spl_chk_date.
+      ls_entity-firstsplscreeningdatetime = <ls_result>-first_spl_time.
+      ls_entity-firstsplscreeningdate = <ls_result>-first_spl_date.
+      ls_entity-splcheckstatus = <ls_result>-splcs.
+      ls_entity-splcheckstatudesc = <ls_result>-splcs_desc.
+      ls_entity-splcheckstatuscriticality = <ls_result>-splcs_crit.
+      ls_entity-processingblockactionisactive = <ls_result>-splac.
+      ls_entity-gtscommentisexisting = <ls_result>-cmtex.
+      ls_entity-logicalsystemgroup = <ls_result>-grvsy.
+      ls_entity-businesspartnertype = <ls_result>-bptyp.
+      <ls_result>-bpvsy = |{ <ls_result>-bpvsy ALPHA = OUT }|. "INSERT KAZI
+      ls_entity-extbusinesspartner = <ls_result>-bpvsy.
+      ls_entity-buspartnertypename = <ls_result>-bptyp_desc.
+      ls_entity-splscreeningblockisindirect = <ls_result>-splib.
+      ls_entity-foreigntradeorganization = <ls_result>-ftorg.
+      ls_entity-createdbyuser = <ls_result>-created_by.
+      ls_entity-lastchangedbyuser = <ls_result>-changed_by.
+      ls_entity-creationdate = <ls_result>-created_on.
+      ls_entity-creationutcdatetime = <ls_result>-created_at.
+      ls_entity-lastchangedate = <ls_result>-changed_on.
+      ls_entity-lastchangedatetime = <ls_result>-changed_at.
+      ls_entity-createdbyusername = <ls_result>-created_by_name.
+      ls_entity-changedbyusername = <ls_result>-changed_by_name.
+      ls_entity-searchterm1 = <ls_result>-sort1.
+      ls_entity-searchterm2 = <ls_result>-sort2.
+      "Populate the Machine Learning Scoring data against every Business Partner, Address ID and Leg. Reg.
+      READ TABLE lt_ml_adrcon WITH KEY adrnr = <ls_result>-adrnr
+                                       lgreg = <ls_result>-lgreg
+                                       partner = lv_partner BINARY SEARCH
+                              INTO DATA(ls_ml_adrcon).
+      IF sy-subrc = 0.
+        ls_entity-mlchk = abap_true.
+        ls_entity-mlpredresp = ls_ml_adrcon-ml_pred_resp.
+        ls_entity-mlconf = ls_ml_adrcon-ml_conf.
+        ls_entity-mlnamescore = ls_ml_adrcon-ml_name_score.
+        ls_entity-mladdrscore = ls_ml_adrcon-ml_addr_score.
+        "ML_PRED_DATE
+        "ML_SCORE_STATUS
+      ENDIF.
+      APPEND ls_entity TO et_entityset.
+    ENDLOOP.
+
+    "Now check if user has used any Machine Learning Related Filter and store them into LS_ML_FILTERS
+    me->get_filter( EXPORTING
+                        io_filter = io_tech_request_context->get_filter( )
+                    IMPORTING
+                        es_filter = ls_ml_filters  ).
+    "If user filters data based on ML Related fields, then loop through the result set of the
+    "Blocked Business Partners, and check if the ML scoring data satisfies the filters, if not then
+    "remove the data from the result set.
+    IF ls_ml_filters IS NOT INITIAL.
+      LOOP AT et_entityset ASSIGNING FIELD-SYMBOL(<lf_entity>).
+        IF ls_ml_filters-mlchk[] IS NOT INITIAL AND
+           <lf_entity>-mlchk NOT IN ls_ml_filters-mlchk.
+          CLEAR: <lf_entity>.
+          CONTINUE.
+        ENDIF.
+        IF ls_ml_filters-mlconf[] IS NOT INITIAL AND
+           <lf_entity>-mlconf NOT IN ls_ml_filters-mlconf.
+          CLEAR: <lf_entity>.
+          CONTINUE.
+        ENDIF.
+        IF ls_ml_filters-mlpredresp[] IS NOT INITIAL AND
+           <lf_entity>-mlpredresp NOT IN ls_ml_filters-mlpredresp.
+          CLEAR: <lf_entity>.
+          CONTINUE.
+        ENDIF.
+        IF ls_ml_filters-mlnamescore[] IS NOT INITIAL AND
+           <lf_entity>-mlnamescore NOT IN ls_ml_filters-mlnamescore.
+          CLEAR: <lf_entity>.
+          CONTINUE.
+        ENDIF.
+        IF ls_ml_filters-mladdrscore[] IS NOT INITIAL AND
+           <lf_entity>-mladdrscore NOT IN ls_ml_filters-mladdrscore.
+          CLEAR: <lf_entity>.
+          CONTINUE.
+        ENDIF.
+      ENDLOOP.
+      DELETE et_entityset WHERE businesspartner IS INITIAL.
+    ENDIF.
+
+    IF io_tech_request_context->get_orderby( ) IS NOT INITIAL.
+      me->apply_orderby(
+        EXPORTING
+          it_order = io_tech_request_context->get_orderby( )
+        CHANGING
+          ct_data  = et_entityset ).
+    ENDIF.
+
+* provide inlinecount if requested
+    DATA(lv_has_inlinecount) = io_tech_request_context->has_inlinecount( ).
+    IF ( lv_has_inlinecount EQ abap_true ).
+      es_response_context-inlinecount =  lines( et_entityset ).
+    ENDIF.
+
+* Handle paging on sorted table
+    lv_skip_i = io_tech_request_context->get_skip( ).
+    lv_top  = io_tech_request_context->get_top( ).
+    IF lv_skip_i NE 0.
+      lv_skip = lv_skip_i.
+    ENDIF.
+
+    IF lv_top IS NOT INITIAL OR lv_skip IS NOT INITIAL.
+      CALL METHOD me->apply_paging
+        EXPORTING
+          iv_top  = lv_top
+          iv_skip = lv_skip
+        CHANGING
+          ct_data = et_entityset.
+    ENDIF.
+
+* provide count if requested
+    DATA(lv_has_count) = io_tech_request_context->has_count( ).
+    IF ( lv_has_count EQ abap_true ).
+      es_response_context-count = lines( et_entityset ).
+    ENDIF.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_ZZGTS_MNG_BLKDBP_DPC_EXT->CLOSE_CASE
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IT_BLKD_ADDR                   TYPE        /SAPSLL/BLOCKED_BP_T
+* | [<---] ET_MESSAGES                    TYPE        BAPIRET2_T
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD close_case.
+*-----------------------------------------------------------------------
+* Creation Date(06/12/2025):
+* Author's Name (& User id): Fayez Kazi
+* Title                    : Manage Blocked Partners - Machine Learing
+* Technical Specification  : VAL-XXXXXXXX / BTEV-XXXXXX / SPEC-XXXXX
+* ER/IM                    :
+*-----------------------------------------------------------------------
+* Description:
+*-----------------------------------------------------------------------
+* As part of Custom oData service - ZZGTS_MNG_BLKDBP_SRV, this method
+* Closes any Active Case for Action Release or Confirm Block
+*----------------------------------------------------------------------*
+* Change Log
+*----------------------------------------------------------------------*
+* Change-Nr          User Name           Transport      Change Date
+* Description:
+* RFC2466528         KAZIF              DG1K912414     12-JUNE-2025
+* E4H - SPL ML Custom Fiori Application
+*----------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&  Method                    CLOSE_CASE
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+
+    DATA: ls_case_mgmt TYPE zgts_case_mgmt,
+          lt_case_mgmt TYPE STANDARD TABLE OF zgts_case_mgmt,
+          lv_partner   TYPE bu_partner,
+          lv_adrnr     TYPE adrnr,
+          ls_messages  TYPE bapiret2.
+    DATA: oref_root TYPE REF TO cx_root.
+    "Populate the BP, Address, Legal Reg into a Local Table
+    DATA(lt_blkd_addr) = it_blkd_addr.
+    "Do the Input Data Conversion for further data selection
+    LOOP AT lt_blkd_addr ASSIGNING FIELD-SYMBOL(<lfs_blkd_addr>).
+      "Partner Conversion Routine
+      lv_partner = <lfs_blkd_addr>-partner.
+      <lfs_blkd_addr>-partner = |{ lv_partner ALPHA = IN }|.
+      "Address Conversion Routine
+      lv_adrnr = <lfs_blkd_addr>-adrnr.
+      <lfs_blkd_addr>-adrnr = |{ lv_adrnr ALPHA = IN }|.
+    ENDLOOP.
+
+    "Now Select ADRCON based on the Action Parameters
+    SELECT guid_adrcon, adrnr, lgreg, guid_pobj
+      FROM /sapsll/adrcon
+      FOR ALL ENTRIES IN @lt_blkd_addr
+      WHERE adrnr = @lt_blkd_addr-adrnr AND
+            lgreg = @lt_blkd_addr-lgreg
+      ORDER BY PRIMARY KEY
+      INTO TABLE @DATA(lt_adrcon).
+    IF sy-subrc = 0.
+      SORT lt_adrcon BY adrnr lgreg.
+      "Now check if there is a Active Case Already exists
+      SELECT * FROM zgts_case_mgmt
+        FOR ALL ENTRIES IN @lt_adrcon
+        WHERE guid_prtn = @lt_adrcon-guid_pobj AND
+              adrnr = @lt_adrcon-adrnr AND
+              lgreg = @lt_adrcon-lgreg AND
+              stat_orderno = '20'  "Opened/In-progress Case
+        ORDER BY PRIMARY KEY
+        INTO TABLE @lt_case_mgmt.
+      IF sy-subrc = 0.
+        LOOP AT lt_blkd_addr ASSIGNING <lfs_blkd_addr>.
+          READ TABLE lt_adrcon WITH KEY adrnr = <lfs_blkd_addr>-adrnr
+                                        lgreg = <lfs_blkd_addr>-lgreg BINARY SEARCH
+                               ASSIGNING FIELD-SYMBOL(<lfs_adrcon>).
+          IF sy-subrc = 0.
+            "Update the change by and Change Time and Processor if there is change
+            "In action (Release / Confirm )
+            LOOP AT lt_case_mgmt ASSIGNING FIELD-SYMBOL(<lfs_case_mgmt>)
+              WHERE guid_prtn = <lfs_adrcon>-guid_pobj AND
+                    adrnr = <lfs_adrcon>-adrnr AND
+                    lgreg = <lfs_adrcon>-lgreg.
+              <lfs_case_mgmt>-changed_by = sy-uname.
+              cl_abap_tstmp=>systemtstmp_syst2utc(
+                EXPORTING
+                  syst_date = sy-datum
+                  syst_time = sy-uzeit
+                IMPORTING
+                  utc_tstmp = <lfs_case_mgmt>-change_time  ).
+              <lfs_case_mgmt>-stat_orderno = '40'.
+            ENDLOOP.
+          ENDIF.
+        ENDLOOP.
+
+        IF lt_case_mgmt[] IS NOT INITIAL.
+          TRY.
+              MODIFY zgts_case_mgmt FROM TABLE lt_case_mgmt.
+              COMMIT WORK AND WAIT.
+            CATCH cx_sy_open_sql_db.
+              ls_messages-type = 'E'.
+              ls_messages-id = 'ZGTS'.
+              ls_messages-number = '000'.
+              ls_messages-message = 'Case Management DB Update failure'.
+              APPEND ls_messages TO et_messages.
+            CATCH cx_sy_open_sql_error.
+              ls_messages-type = 'E'.
+              ls_messages-id = 'ZGTS'.
+              ls_messages-number = '000'.
+              ls_messages-message = 'Case Management DB Update failure'.
+              APPEND ls_messages TO et_messages.
+            CATCH cx_root INTO oref_root.
+              ls_messages-type = 'E'.
+              ls_messages-id = 'ZGTS'.
+              ls_messages-number = '000'.
+              ls_messages-message = oref_root->get_text( ).
+              APPEND ls_messages TO et_messages.
+          ENDTRY.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_ZZGTS_MNG_BLKDBP_DPC_EXT->CREATE_CASE
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IT_BLKD_ADDR                   TYPE        /SAPSLL/BLOCKED_BP_T
+* | [<---] ET_MESSAGES                    TYPE        BAPIRET2_T
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD create_case.
+*-----------------------------------------------------------------------
+* Creation Date(06/12/2025):
+* Author's Name (& User id): Fayez Kazi
+* Title                    : Manage Blocked Partners - Machine Learing
+* Technical Specification  : VAL-XXXXXXXX / BTEV-XXXXXX / SPEC-XXXXX
+* ER/IM                    :
+*-----------------------------------------------------------------------
+* Description:
+*-----------------------------------------------------------------------
+* As part of Custom oData service - ZZGTS_MNG_BLKDBP_SRV, this method
+* Create or Change Case for Action Adopt or Forward
+*----------------------------------------------------------------------*
+* Change Log
+*----------------------------------------------------------------------*
+* Change-Nr          User Name           Transport      Change Date
+* Description:
+* RFC2466528         KAZIF              DG1K912414     12-JUNE-2025
+* E4H - SPL ML Custom Fiori Application
+*----------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&  Method                    CREATE_CASE
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+
+    DATA: ls_case_mgmt TYPE zgts_case_mgmt,
+          lt_case_mgmt TYPE STANDARD TABLE OF zgts_case_mgmt,
+          lv_partner   TYPE bu_partner,
+          lv_adrnr     TYPE adrnr,
+          ls_messages  TYPE bapiret2.
+    DATA: oref_root TYPE REF TO cx_root.
+    "Populate the BP, Address, Legal Reg into a Local Table
+    DATA(lt_blkd_addr) = it_blkd_addr.
+    "Do the Input Data Conversion for further data selection
+    LOOP AT lt_blkd_addr ASSIGNING FIELD-SYMBOL(<lfs_blkd_addr>).
+      "Partner Conversion Routine
+      lv_partner = <lfs_blkd_addr>-partner.
+      <lfs_blkd_addr>-partner = |{ lv_partner ALPHA = IN }|.
+      "Address Conversion Routine
+      lv_adrnr = <lfs_blkd_addr>-adrnr.
+      <lfs_blkd_addr>-adrnr = |{ lv_adrnr ALPHA = IN }|.
+    ENDLOOP.
+
+    "Now Select ADRCON based on the Action Parameters
+    SELECT guid_adrcon, adrnr, lgreg, guid_pobj
+      FROM /sapsll/adrcon
+      FOR ALL ENTRIES IN @lt_blkd_addr
+      WHERE adrnr = @lt_blkd_addr-adrnr AND
+            lgreg = @lt_blkd_addr-lgreg
+      ORDER BY PRIMARY KEY
+      INTO TABLE @DATA(lt_adrcon).
+    IF sy-subrc = 0.
+      SORT lt_adrcon BY adrnr lgreg.
+      "Now check if there is a Active Case Already exists
+      SELECT * FROM zgts_case_mgmt
+        FOR ALL ENTRIES IN @lt_adrcon
+        WHERE guid_prtn = @lt_adrcon-guid_pobj AND
+              adrnr = @lt_adrcon-adrnr AND
+              lgreg = @lt_adrcon-lgreg AND
+              stat_orderno = '20'  "Opened/In-progress Case
+        ORDER BY PRIMARY KEY
+        INTO TABLE @lt_case_mgmt.
+      IF sy-subrc = 0.
+        LOOP AT lt_blkd_addr ASSIGNING <lfs_blkd_addr>.
+          READ TABLE lt_adrcon WITH KEY adrnr = <lfs_blkd_addr>-adrnr
+                                        lgreg = <lfs_blkd_addr>-lgreg BINARY SEARCH
+                               ASSIGNING FIELD-SYMBOL(<lfs_adrcon>).
+          IF sy-subrc = 0.
+            "Update the change by and Change Time and Processor if there is change
+            "In action (Adopt / Forward )
+            LOOP AT lt_case_mgmt ASSIGNING FIELD-SYMBOL(<lfs_case_mgmt>)
+              WHERE guid_prtn = <lfs_adrcon>-guid_pobj AND
+                    adrnr = <lfs_adrcon>-adrnr AND
+                    lgreg = <lfs_adrcon>-lgreg.
+              <lfs_case_mgmt>-changed_by = sy-uname.
+              cl_abap_tstmp=>systemtstmp_syst2utc(
+                EXPORTING
+                  syst_date = sy-datum
+                  syst_time = sy-uzeit
+                IMPORTING
+                  utc_tstmp = <lfs_case_mgmt>-change_time  ).
+              IF <lfs_blkd_addr>-prosl IS NOT INITIAL.
+                <lfs_case_mgmt>-assign_to = <lfs_blkd_addr>-prosl.
+              ELSE.
+                <lfs_case_mgmt>-assign_to = sy-uname.
+              ENDIF.
+            ENDLOOP.
+          ENDIF.
+        ENDLOOP.
+
+      ELSE.
+        "If No Active Case Found then update then Create a New Case
+        LOOP AT lt_blkd_addr ASSIGNING <lfs_blkd_addr>.
+          READ TABLE lt_adrcon WITH KEY adrnr = <lfs_blkd_addr>-adrnr
+                                        lgreg = <lfs_blkd_addr>-lgreg BINARY SEARCH
+                               ASSIGNING <lfs_adrcon>.
+          IF sy-subrc = 0.
+            ls_case_mgmt-guid_case = cl_system_uuid=>if_system_uuid_static~create_uuid_x16( ).
+            ls_case_mgmt-guid_prtn = <lfs_adrcon>-guid_pobj.
+            ls_case_mgmt-adrnr = <lfs_adrcon>-adrnr.
+            ls_case_mgmt-lgreg = <lfs_adrcon>-lgreg.
+            ls_case_mgmt-opened_by = sy-uname.
+            cl_abap_tstmp=>systemtstmp_syst2utc(
+            EXPORTING
+              syst_date = sy-datum
+              syst_time = sy-uzeit
+            IMPORTING
+              utc_tstmp = ls_case_mgmt-opened_time
+              ).
+            ls_case_mgmt-stat_orderno = '20'. "Create / In Progress / Active Cases
+            IF <lfs_blkd_addr>-prosl IS NOT INITIAL.
+              ls_case_mgmt-assign_to = <lfs_blkd_addr>-prosl.
+            ELSE.
+              ls_case_mgmt-assign_to = sy-uname.
+            ENDIF.
+            APPEND ls_case_mgmt TO lt_case_mgmt.
+          ENDIF.
+        ENDLOOP.
+      ENDIF.
+    ENDIF.
+
+    IF lt_case_mgmt[] IS NOT INITIAL.
+      "Update the Case Management DB
+      TRY.
+          MODIFY zgts_case_mgmt FROM TABLE lt_case_mgmt.
+          COMMIT WORK AND WAIT.
+        CATCH cx_sy_open_sql_db.
+          ls_messages-type = 'E'.
+          ls_messages-id = 'ZGTS'.
+          ls_messages-number = '000'.
+          ls_messages-message = 'Case Management DB Update failure'.
+          APPEND ls_messages TO et_messages.
+        CATCH cx_sy_open_sql_error.
+          ls_messages-type = 'E'.
+          ls_messages-id = 'ZGTS'.
+          ls_messages-number = '000'.
+          ls_messages-message = 'Case Management DB Update failure'.
+          APPEND ls_messages TO et_messages.
+        CATCH cx_root INTO oref_root.
+          ls_messages-type = 'E'.
+          ls_messages-id = 'ZGTS'.
+          ls_messages-number = '000'.
+          ls_messages-message = oref_root->get_text( ).
+          APPEND ls_messages TO et_messages.
+      ENDTRY.
+    ELSE.
+      "If there is no Case Management data, the fail the entire Operation
+      ls_messages-type = 'E'.
+      ls_messages-id = 'ZGTS'.
+      ls_messages-number = '000'.
+      ls_messages-message = 'Case Create/Change failed'.
+      APPEND ls_messages TO et_messages.
+    ENDIF.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_ZZGTS_MNG_BLKDBP_DPC_EXT->GET_MLPRED
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IT_BLKD_ADDR                   TYPE        /SAPSLL/BLOCKED_BP_T
+* | [<---] ET_MESSAGES                    TYPE        BAPIRET2_T
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD get_mlpred.
+*-----------------------------------------------------------------------
+* Creation Date(06/12/2025):
+* Author's Name (& User id): Fayez Kazi
+* Title                    : Manage Blocked Partners - Machine Learing
+* Technical Specification  : VAL-XXXXXXXX / BTEV-XXXXXX / SPEC-XXXXX
+* ER/IM                    :
+*-----------------------------------------------------------------------
+* Description:
+*-----------------------------------------------------------------------
+* As part of Custom oData service - ZZGTS_MNG_BLKDBP_SRV, this method
+* Call the iERP API to get the Machine Learning Predictions.
+*----------------------------------------------------------------------*
+* Change Log
+*----------------------------------------------------------------------*
+* Change-Nr          User Name           Transport      Change Date
+* Description:
+* RFC2466528         KAZIF              DG1K912414     12-JUNE-2025
+* E4H - SPL ML Custom Fiori Application
+*----------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&  Method                    GET_MLPRED
+*&---------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+
+
+    DATA: lv_adrnr             TYPE adrnr,
+          lv_partner           TYPE bu_partner,
+          lv_guid              TYPE guid_32,
+          ls_message           TYPE bapiret2,
+          lt_blkd_addr         TYPE /sapsll/blocked_bp_t,
+          lt_adrcon            TYPE /sapsll/adrcon_t,
+          lt_blocked_bp_adrcon TYPE /sapsll/adrcon_blocked_bp_t.
+
+    DATA: ls_rng_mandt TYPE /sapsll/mandt_r_s,
+          ls_rng_lgreg TYPE /sapsll/lgreg_r_s,
+          ls_rng_adrnr TYPE /sapsll/adrnr_r_s,
+          ls_crit      TYPE /sapsll/adrcon_crit_s.
+    "Check if the Blocked Partners List
+    IF it_blkd_addr[] IS NOT INITIAL.
+      lt_blkd_addr[] = it_blkd_addr[].
+      "1. Prepare the Data to get Legal Control Data for the derived Address
+      ls_rng_mandt-sign = ls_rng_adrnr-sign = ls_rng_lgreg-sign = 'I'.
+      ls_rng_mandt-option = ls_rng_adrnr-option = ls_rng_lgreg-option = 'EQ'.
+      APPEND ls_rng_mandt TO ls_crit-mandt.
+      LOOP AT lt_blkd_addr ASSIGNING FIELD-SYMBOL(<lfs_blkd_addr>).
+        lv_adrnr = <lfs_blkd_addr>-adrnr.
+        <lfs_blkd_addr>-adrnr = ls_rng_adrnr-low = |{ lv_adrnr ALPHA = IN }|.
+        APPEND ls_rng_adrnr TO ls_crit-adrnr.
+
+        ls_rng_lgreg-low = <lfs_blkd_addr>-lgreg.
+        APPEND ls_rng_lgreg TO ls_crit-lgreg.
+
+        lv_partner = <lfs_blkd_addr>-partner.
+        <lfs_blkd_addr>-partner = |{ lv_partner ALPHA = IN }|.
+*        APPEND ls_rng_partner TO lt_rng_partner.
+
+      ENDLOOP.
+      "2. Get the Legal Control: Data on Address Defined for Business Partner
+      "Get the data of the Blocked Business Partners and store the results into LT_ADRCON
+      CALL FUNCTION '/SAPSLL/ADRCON_GET_OBJECT'
+        EXPORTING
+          is_crit       = ls_crit
+        IMPORTING
+          et_result     = lt_adrcon
+        EXCEPTIONS
+          invalid_call  = 1
+          missing_adrnr = 2
+          OTHERS        = 3.
+      IF sy-subrc <> 0.
+* Implement suitable error handling here
+      ENDIF.
+
+      "3. Prepare the Data for ML Screening
+      IF lt_adrcon[] IS NOT INITIAL.
+        lt_blocked_bp_adrcon = VALUE #( FOR ls_adrcon IN lt_adrcon
+                                      ( CORRESPONDING #( ls_adrcon ) ) ).
+        LOOP AT lt_blocked_bp_adrcon ASSIGNING FIELD-SYMBOL(<lfs_blkd_addrcon>).
+          READ TABLE lt_blkd_addr WITH KEY adrnr = <lfs_blkd_addrcon>-adrnr
+                                           lgreg = <lfs_blkd_addrcon>-lgreg BINARY SEARCH
+                                  ASSIGNING <lfs_blkd_addr>.
+          IF sy-subrc = 0.
+            <lfs_blkd_addrcon>-box = abap_true.
+            <lfs_blkd_addrcon>-partner = <lfs_blkd_addr>-partner.
+          ENDIF.
+        ENDLOOP.
+        "4. Update the screening request to HANA DB
+        CALL FUNCTION 'ZGTS_BP_ML_INIT_SCREENING_REQ'
+          EXPORTING
+            it_bp              = lt_blocked_bp_adrcon
+          CHANGING
+            c_scoring_guid     = lv_guid
+          EXCEPTIONS
+            no_data_selected   = 1
+            no_score_run       = 2
+            no_ierp_connection = 3
+            no_ierp_tabname    = 4
+            no_ierp_insert     = 5
+            OTHERS             = 6.
+        IF sy-subrc <> 0.
+          ls_message-number = sy-msgno.
+          ls_message-type = sy-msgty.
+          ls_message-id = sy-msgid.
+          ls_message-message_v1 = sy-msgv1.
+          ls_message-message_v2 = sy-msgv2.
+          ls_message-message_v3 = sy-msgv3.
+          ls_message-message_v4 = sy-msgv4.
+          APPEND ls_message TO et_messages.
+          RETURN.
+        ENDIF.
+        IF lv_guid IS NOT INITIAL.
+          "5. Call the API for the iERP Machine Learning Prediction
+          CALL FUNCTION 'ZGTS_BP_ML_API_CALL'
+            EXPORTING
+              i_scoring_guid            = lv_guid
+              i_appname                 = 'BP_ML'
+            EXCEPTIONS
+              time_out                  = 1
+              no_url                    = 2
+              no_apikey                 = 3
+              http_send_error           = 4
+              http_receive_error        = 5
+              no_response_message       = 6
+              api_error                 = 7
+              http_request_create_error = 8
+              no_ierp_tabname           = 9
+              no_ierp_connection        = 10
+              no_ierp_update            = 11
+              OTHERS                    = 12.
+          IF sy-subrc <> 0.
+            ls_message-number = sy-msgno.
+            ls_message-type = sy-msgty.
+            ls_message-id = sy-msgid.
+            ls_message-message_v1 = sy-msgv1.
+            ls_message-message_v2 = sy-msgv2.
+            ls_message-message_v3 = sy-msgv3.
+            ls_message-message_v4 = sy-msgv4.
+            APPEND ls_message TO et_messages.
+            RETURN.
+          ENDIF.
+        ENDIF.
+      ELSE.
+        ls_message-type = 'E'.
+        ls_message-message = 'Legal Control of Address Data Not found, ML Prediction not possible'.
+        APPEND ls_message TO et_messages.
+        RETURN.
+      ENDIF.
+
+    ENDIF.
+  ENDMETHOD.
+ENDCLASS.
